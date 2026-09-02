@@ -1,0 +1,76 @@
+# ---------------------------------------------------------------------------
+# Secrets and local configuration
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+.venv/
+venv/
+env/
+.conda
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---------------------------------------------------------------------------
+# Node / frontend
+# ---------------------------------------------------------------------------
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+.eslintcache
+
+# ---------------------------------------------------------------------------
+# Runtime data — never commit the database or uploaded files
+# ---------------------------------------------------------------------------
+backend/storage/*.db
+backend/storage/*.db-shm
+backend/storage/*.db-wal
+backend/storage/resumes/
+backend/storage/cache/
+*.db
+*.sqlite
+*.sql.bak
+
+# ---------------------------------------------------------------------------
+# Candidate resumes — real names, emails and phone numbers.
+# Kept out of version control so they are not published with the repository.
+# Put your own samples in this folder locally, then run `python -m app.seed`.
+# ---------------------------------------------------------------------------
+src/components/datafiles/Input_files/
+src/components/datafiles/Output_files/
+
+# ---------------------------------------------------------------------------
+# Logs
+# ---------------------------------------------------------------------------
+logs/
+*.log
+LOGS/
+
+# ---------------------------------------------------------------------------
+# Editors / OS
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------------------
+# Misc
+# ---------------------------------------------------------------------------
+artifacts/
+plan_for_resume_ranking_system.txt

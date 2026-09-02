@@ -1,0 +1,30 @@
+# Resume Parsing
+pdfminer.six
+python-docx
+PyMuPDF
+# Natural Language Processing
+nltk
+spacy
+textblob
+transformers
+
+# Feature Extraction and Similarity
+scikit-learn
+sentence-transformers
+
+# Database
+SQLAlchemy
+
+# Optional UI
+streamlit
+pdf2image
+Pillow
+
+# Utilities
+pandas
+numpy
+
+# Other
+regex
+
+ 

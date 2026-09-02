@@ -1,0 +1,177 @@
+# TalentRank — Explainable Resume Screening
+
+Rank applicants against a role in seconds, and see exactly which skills, experience
+and resume evidence produced every score.
+
+Originally an academic NLP project, rebuilt as a working product: a FastAPI backend
+with semantic matching and a React front end.
+
+---
+
+## Quick start
+
+Two terminals. Nothing else to install or configure — it runs on SQLite by default.
+
+**1. Backend**
+
+```bash
+cd backend && pip install -r requirements.txt
+```
+
+```bash
+cd backend && python -m app.seed
+```
+
+```bash
+cd backend && python -m uvicorn app.main:app --reload --port 8000
+```
+
+**2. Frontend**
+
+```bash
+cd frontend && npm install
+```
+
+```bash
+cd frontend && npm run dev
+```
+
+Open http://localhost:5173. The seed script loads the 31 bundled sample resumes,
+creates three roles, and scores every pairing.
+
+### Demo accounts
+
+| Role | Email | Password |
+|---|---|---|
+| Recruiter | `recruiter@talentrank.dev` | `recruit12345` |
+| Admin | `admin@talentrank.dev` | `admin12345` |
+| Candidate | `candidate@talentrank.dev` | `candidate12345` |
+
+API docs are at http://localhost:8000/docs.
+
+---
+
+## How scoring works
+
+Every candidate–role pair is scored on five dimensions, each in `[0, 1]`, combined
+with per-role weights that are normalised to sum to 1.0:
+
+| Dimension | Default weight | What it measures |
+|---|---|---|
+| **Skills** | 0.35 | Required skills the resume evidences — exact matches plus embedding-based matches, so "ML" counts for "machine learning" |
+| **Experience** | 0.25 | Years against the role minimum; log-scaled below it, so 4 of 5 years scores 0.86 rather than 0.80 |
+| **Education** | 0.15 | Highest qualification against the minimum, on an ordinal scale |
+| **Relevance** | 0.15 | Cosine similarity between the resume and the job description |
+| **Location** | 0.10 | Same city or metro; automatically 1.0 for remote roles |
+
+Every dimension returns a reason, not just a number, so the UI can answer *"why is
+this person ranked third?"* — with a radar chart, a weighted breakdown, matched vs
+missing skill chips, and the actual resume sentences that evidenced each match.
+
+**Matching backend.** Semantic matching uses `sentence-transformers/all-MiniLM-L6-v2`
+(~90 MB, downloaded once on first run). If it can't be loaded — no network, or
+`EMBEDDINGS_ENABLED=false` — the app falls back to TF-IDF fitted **once over the whole
+corpus**, so scores stay comparable across candidates. The header badge always shows
+which backend is live.
+
+---
+
+## Features
+
+**For recruiters**
+- Ranked candidate table with per-dimension bars and sortable columns
+- Explainability drawer: radar chart, weighted breakdown, skill chips, resume evidence
+- Live weight tuning — drag a slider, see the ranking reorder instantly with ▲▼ deltas; nothing is saved until you apply
+- Kanban pipeline (New → Shortlisted → Interviewing → Offer → Hired / Rejected) with drag-and-drop *and* a keyboard-accessible menu on every card
+- Side-by-side comparison of 2–3 candidates with an overlaid radar and skill matrix
+- Filters and full-text search; CSV shortlist export
+- Notes and 1–5 star ratings per candidate
+- Duplicate detection by email, phone or resume content hash
+- Analytics: score distribution, experience spread, skill supply gap, pipeline funnel
+- Audit log of every change
+
+**Bias-reduced review.** A "blind review" toggle hides names, contact details,
+universities and locations, replacing each candidate with a stable alias
+(*Swift Falcon #4821*). Redaction happens **server-side** — hiding fields in the
+browser would still ship the real values over the wire. Skills, experience, scores
+and evidence all survive, because those are what the reviewer is meant to judge.
+
+**For candidates**
+- Drag-and-drop upload with live per-file progress over SSE
+- See exactly what was extracted, and correct anything wrong — corrections are what
+  recruiters then match against
+- Resume health check: eight scored checks (machine-readable, contact details,
+  skills, experience, education, standard sections, length, links), each with a
+  concrete fix
+
+---
+
+## Architecture
+
+```
+frontend/                      React 19 · Vite · TypeScript · Tailwind · Radix
+  src/components/ui/           shadcn-style primitives
+  src/components/app/          Drawer, kanban, compare, weight sliders, palette
+  src/pages/                   One file per route
+  src/lib/api.ts               Typed API client
+  src/hooks/                   Auth, theme, blind review, SSE stream
+
+backend/
+  app/models.py                Single SQLAlchemy 2.0 schema
+  app/schemas.py               Pydantic request/response models
+  app/core/                    Config, database, JWT + PBKDF2 auth
+  app/services/
+    taxonomy.py                Skills, aliases, regex patterns, gazetteers
+    extraction.py              PDF/DOCX → text (pypdf, python-docx)
+    parsing.py                 Text → structured fields
+    embeddings.py              Sentence transformers + TF-IDF fallback
+    scoring.py                 The five-dimension explainable scorer
+    ranking.py                 Persisting and re-scoring matches
+    health_check.py            Resume health report
+    anonymize.py               Server-side redaction for blind review
+    pipeline.py                Ingestion queue + SSE event bus
+  app/api/routes/              auth · jobs · candidates · uploads · matches · analytics
+```
+
+**Ingestion pipeline.** Upload → queued → extract → parse → embed → score against
+every open role, on background worker threads, with each state change broadcast to
+subscribed browsers over server-sent events.
+
+---
+
+## Configuration
+
+Everything is optional — copy `backend/.env.example` to `backend/.env` to change it.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `DATABASE_URL` | `sqlite:///./storage/talentrank.db` | Any SQLAlchemy URL. For MySQL: `pip install PyMySQL` then `mysql+pymysql://user:pass@localhost:3306/resume_db` |
+| `SECRET_KEY` | `dev-secret-change-me` | **Change before exposing the app to a network** |
+| `EMBEDDINGS_ENABLED` | `true` | `false` forces the offline TF-IDF path |
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Any sentence-transformers model |
+| `STORAGE_DIR` | `./storage/resumes` | Where uploaded files are written |
+| `CORS_ORIGINS` | `http://localhost:5173,…` | Comma-separated |
+
+---
+
+## Notes and limits
+
+- **Parsing is rule-based, not perfect.** Across the 31 bundled sample resumes it
+  extracts a usable name for 29 and a location for 25. Unusual layouts (multi-column,
+  heavy tables) still produce odd names. That is exactly why candidates can correct
+  their own parsed data.
+- **Scanned PDFs are rejected, not silently mis-ranked.** One bundled sample is a
+  scan; it fails with an explicit "needs OCR" message rather than scoring 0.
+- **No spaCy.** The original code called `spacy.load('en_core_web_lg')` in five
+  places for entity extraction that barely fed the score. Rule-based extraction over
+  a curated taxonomy plus sentence embeddings does better here without a 560 MB
+  model download.
+- **Passwords use PBKDF2-HMAC-SHA256** from the standard library rather than bcrypt,
+  which avoids a native build step on Windows without weakening the hash.
+- The original Streamlit apps and the `preprocessing/` package are left in place for
+  reference; nothing in `backend/` or `frontend/` depends on them.
+
+## Credits
+
+Original project by Ayush. Rebuilt with an explainable scoring engine and a new
+front end.
