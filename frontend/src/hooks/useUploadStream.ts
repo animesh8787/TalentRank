@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
+import { API_BASE } from '@/lib/api'
 import type { UploadEvent } from '@/types'
 
 export interface StreamState {
@@ -29,7 +30,7 @@ export function useUploadStream(enabled: boolean) {
 
     const connect = () => {
       if (disposed) return
-      const source = new EventSource('/api/uploads/stream')
+      const source = new EventSource(`${API_BASE}/api/uploads/stream`)
       sourceRef.current = source
 
       source.onopen = () => {

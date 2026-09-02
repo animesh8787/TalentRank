@@ -1,5 +1,13 @@
 # TalentRank — Explainable Resume Screening
 
+[![CI](https://github.com/animesh8787/TalentRank/actions/workflows/ci.yml/badge.svg)](https://github.com/animesh8787/TalentRank/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Live demo](https://img.shields.io/badge/demo-not_deployed_yet-lightgrey)](#live-deployment)
+[![Backend](https://img.shields.io/badge/backend-FastAPI-009688?logo=fastapi&logoColor=white)](backend)
+[![Frontend](https://img.shields.io/badge/frontend-React_19-61DAFB?logo=react&logoColor=black)](frontend)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](frontend)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](backend)
+
 Rank applicants against a role in seconds, and see exactly which skills, experience
 and resume evidence produced every score.
 
@@ -160,6 +168,40 @@ Everything is optional — copy `backend/.env.example` to `backend/.env` to chan
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Any sentence-transformers model |
 | `STORAGE_DIR` | `./storage/resumes` | Where uploaded files are written |
 | `CORS_ORIGINS` | `http://localhost:5173,…` | Comma-separated |
+
+The frontend reads one build-time variable, `VITE_API_URL` — the backend's base URL
+(e.g. `https://talentrank-api.onrender.com`). Leave it unset for local dev; Vite's
+proxy handles `/api` for you (see `frontend/vite.config.ts`).
+
+---
+
+## Live deployment
+
+The frontend is static and deploys anywhere; the backend needs a real server — it
+keeps a SQLite file, runs background worker threads, and streams upload progress
+over SSE, none of which fit a serverless function. Two free-tier services cover both:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/animesh8787/TalentRank)
+
+**1. Backend (Render).** Click the button above — it reads [`render.yaml`](render.yaml)
+and creates the API under *your own* Render account (sign-up is Render's, not
+something I can do on your behalf). Free-tier trade-offs, so the demo actually
+works within 512MB RAM: `EMBEDDINGS_ENABLED=false` (keyword/TF-IDF matching instead
+of the sentence-transformer), a cold start of ~30-60s after 15 minutes idle, and an
+ephemeral disk — SQLite data resets on redeploy. For persistent data, point
+`DATABASE_URL` at a free hosted Postgres (e.g. [Neon](https://neon.tech) or
+[Supabase](https://supabase.com)) instead.
+
+**2. Frontend (Vercel).** From `frontend/`:
+
+```bash
+vercel --prod
+```
+
+Then in the Vercel project's settings, add the environment variable
+`VITE_API_URL=<your Render URL>` and redeploy. Finally, back on Render, set
+`CORS_ORIGINS` to your Vercel domain (it's marked `sync: false` in the blueprint,
+so it's not set automatically) and restart the service.
 
 ---
 

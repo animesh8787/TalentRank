@@ -20,6 +20,14 @@ import type {
 const TOKEN_KEY = 'talentrank.token'
 const ANON_KEY = 'talentrank.anonymized'
 
+/**
+ * Base URL for the API. In dev this is empty — Vite's proxy forwards `/api`
+ * to the local backend (see vite.config.ts). In production the frontend and
+ * backend are deployed to different domains, so `VITE_API_URL` must point at
+ * the deployed backend (e.g. `https://talentrank-api.onrender.com`).
+ */
+export const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '')
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -100,7 +108,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     payload = JSON.stringify(body)
   }
 
-  const response = await fetch(`/api${path}`, { ...rest, headers: finalHeaders, body: payload })
+  const response = await fetch(`${API_BASE}/api${path}`, { ...rest, headers: finalHeaders, body: payload })
 
   if (response.status === 401) {
     tokenStore.clear()
@@ -206,7 +214,7 @@ export const api = {
       return request<Upload[]>('/uploads', { method: 'POST', body: form })
     },
     retry: (id: number) => request<Upload>(`/uploads/${id}/retry`, { method: 'POST' }),
-    fileUrl: (id: number) => `/api/uploads/${id}/file`,
+    fileUrl: (id: number) => `${API_BASE}/api/uploads/${id}/file`,
   },
 
   matches: {
@@ -231,7 +239,7 @@ export const api = {
       remove: (noteId: number) => request<void>(`/notes/${noteId}`, { method: 'DELETE' }),
     },
     exportUrl: (jobId: number, stage?: PipelineStage) =>
-      `/api/jobs/${jobId}/export.csv${qs({ stage, anonymized: anonymizedStore.get() ? 1 : undefined })}`,
+      `${API_BASE}/api/jobs/${jobId}/export.csv${qs({ stage, anonymized: anonymizedStore.get() ? 1 : undefined })}`,
   },
 
   analytics: {

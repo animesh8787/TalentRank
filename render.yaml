@@ -1,0 +1,36 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Deploys the TalentRank API as a free web service. Click the "Deploy to
+# Render" button in the README, or run `render blueprint launch` against
+# this file, to create it under your own Render account.
+#
+# Free-tier notes (see README > Live deployment):
+#   - 512MB RAM: EMBEDDINGS_ENABLED is set to false so the app uses the
+#     lightweight TF-IDF matcher instead of loading the ~90MB sentence-
+#     transformer + torch, which would not reliably fit. Semantic matching
+#     is still the default for local development (backend/.env.example).
+#   - Free instances spin down after 15 minutes idle; the first request
+#     after that takes ~30-60s to wake up.
+#   - The free disk is ephemeral: data written to SQLite is lost on every
+#     redeploy or restart. Attach a paid persistent disk, or point
+#     DATABASE_URL at a hosted Postgres (e.g. Neon, Supabase — both have
+#     free tiers), for data that needs to survive.
+
+services:
+  - type: web
+    name: talentrank-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:///./storage/talentrank.db
+      - key: EMBEDDINGS_ENABLED
+        value: "false"
+      - key: CORS_ORIGINS
+        sync: false # set to your deployed frontend URL after the first deploy
