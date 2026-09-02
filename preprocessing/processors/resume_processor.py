@@ -481,7 +481,9 @@ class ResumeProcessor:
 
 def main():
     # Database connection
-    DATABASE_URL = "mysql+pymysql://root:123456@localhost:3306/resume_db"
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL", "mysql+pymysql://root:password@localhost:3306/resume_db"
+    )
     
     # Initialize processor
     processor = ResumeProcessor(DATABASE_URL)

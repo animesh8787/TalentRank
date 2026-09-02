@@ -6,7 +6,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import pandas as pd
 
-DATABASE_URL = "mysql+pymysql://root:123456@localhost:3306/resume_db"
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "mysql+pymysql://root:password@localhost:3306/resume_db"
+)
 
 # Helper function to parse job description input into a simple object
 class JobDescription:

@@ -1,3 +1,5 @@
+import os
+
 from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, Text, Enum, Date, DateTime, Boolean
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
@@ -163,7 +165,9 @@ class AnalysisResults(Base):
 
 def create_all_tables():
     """Create all tables in the database"""
-    DATABASE_URL = "mysql+pymysql://root:123456@localhost:3306/resume_db"
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL", "mysql+pymysql://root:password@localhost:3306/resume_db"
+    )
     engine = create_engine(DATABASE_URL)
     
     try:

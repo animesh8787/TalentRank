@@ -438,7 +438,9 @@ class JobMatcher:
 def main():
     # Get the current script's directory
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    DATABASE_URL = "mysql+pymysql://root:123456@localhost:3306/resume_db"
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL", "mysql+pymysql://root:password@localhost:3306/resume_db"
+    )
     # Configure input directory relative to the script location
     input_dir = os.path.join(current_dir, '..', 'src', 'components', 'datafiles', 'Input_files', 'sample resume')
     
