@@ -2,7 +2,8 @@
 
 [![CI](https://github.com/animesh8787/TalentRank/actions/workflows/ci.yml/badge.svg)](https://github.com/animesh8787/TalentRank/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Live demo](https://img.shields.io/badge/demo-not_deployed_yet-lightgrey)](#live-deployment)
+[![Live demo](https://img.shields.io/badge/frontend-live-brightgreen)](https://frontend-lake-phi-56.vercel.app)
+[![API status](https://img.shields.io/badge/API-not_deployed_yet-lightgrey)](#live-deployment)
 [![Backend](https://img.shields.io/badge/backend-FastAPI-009688?logo=fastapi&logoColor=white)](backend)
 [![Frontend](https://img.shields.io/badge/frontend-React_19-61DAFB?logo=react&logoColor=black)](frontend)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](frontend)
@@ -13,6 +14,9 @@ and resume evidence produced every score.
 
 Originally an academic NLP project, rebuilt as a working product: a FastAPI backend
 with semantic matching and a React front end.
+
+**[Live frontend →](https://frontend-lake-phi-56.vercel.app)** (sign-in won't work until
+the backend below is deployed too — see [Live deployment](#live-deployment))
 
 ---
 
@@ -192,15 +196,12 @@ ephemeral disk — SQLite data resets on redeploy. For persistent data, point
 `DATABASE_URL` at a free hosted Postgres (e.g. [Neon](https://neon.tech) or
 [Supabase](https://supabase.com)) instead.
 
-**2. Frontend (Vercel).** From `frontend/`:
-
-```bash
-vercel --prod
-```
-
-Then in the Vercel project's settings, add the environment variable
-`VITE_API_URL=<your Render URL>` and redeploy. Finally, back on Render, set
-`CORS_ORIGINS` to your Vercel domain (it's marked `sync: false` in the blueprint,
+**2. Frontend (Vercel).** Already deployed: https://frontend-lake-phi-56.vercel.app.
+It's a static build with no backend wired up yet, so every API call fails until step 1
+is done. To point it at your backend once it's up: in the Vercel project's settings,
+add the environment variable `VITE_API_URL=<your Render URL>` and redeploy (`vercel
+--prod` from `frontend/`, or trigger it from the dashboard). Finally, back on Render,
+set `CORS_ORIGINS` to your Vercel domain (it's marked `sync: false` in the blueprint,
 so it's not set automatically) and restart the service.
 
 ---
