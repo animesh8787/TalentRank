@@ -36,8 +36,17 @@ cd frontend && npm install
 cd frontend && npm run dev
 ```
 
-Open http://localhost:5173. The seed script loads the 31 bundled sample resumes,
-creates three roles, and scores every pairing.
+Open http://localhost:5173.
+
+The seed script creates the demo users and three roles, then ingests any resumes
+found in `src/components/datafiles/Input_files/sample resume/` and scores every
+pairing. **That folder is gitignored** — resumes contain real names, emails and
+phone numbers, so they are not published with the repository. Drop your own PDFs
+or DOCX files there before seeding, or skip it and upload through the UI:
+
+```bash
+cd backend && python -m app.seed --no-resumes
+```
 
 ### Demo accounts
 
@@ -156,12 +165,12 @@ Everything is optional — copy `backend/.env.example` to `backend/.env` to chan
 
 ## Notes and limits
 
-- **Parsing is rule-based, not perfect.** Across the 31 bundled sample resumes it
-  extracts a usable name for 29 and a location for 25. Unusual layouts (multi-column,
-  heavy tables) still produce odd names. That is exactly why candidates can correct
-  their own parsed data.
-- **Scanned PDFs are rejected, not silently mis-ranked.** One bundled sample is a
-  scan; it fails with an explicit "needs OCR" message rather than scoring 0.
+- **Parsing is rule-based, not perfect.** Across the 31 resumes it was developed
+  against, it extracted a usable name for 29 and a location for 25. Unusual layouts
+  (multi-column, heavy tables) still produce odd names. That is exactly why
+  candidates can correct their own parsed data.
+- **Scanned PDFs are rejected, not silently mis-ranked.** They fail with an explicit
+  "needs OCR" message rather than scoring 0.
 - **No spaCy.** The original code called `spacy.load('en_core_web_lg')` in five
   places for entity extraction that barely fed the score. Rule-based extraction over
   a curated taxonomy plus sentence embeddings does better here without a 560 MB
