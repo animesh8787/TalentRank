@@ -1,7 +1,7 @@
+import { auth } from '@/lib/firebase'
 import type {
   Analytics,
   AuditEvent,
-  AuthResponse,
   Candidate,
   CandidateDetail,
   FilterOptions,
@@ -17,7 +17,6 @@ import type {
   WeightPreviewRow,
 } from '@/types'
 
-const TOKEN_KEY = 'talentrank.token'
 const ANON_KEY = 'talentrank.anonymized'
 
 /**
@@ -40,30 +39,23 @@ export class ApiError extends Error {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Token + anonymised-review state (localStorage, wrapped for private mode)    */
+/* Anonymised-review state (localStorage, wrapped for private mode)           */
 /* -------------------------------------------------------------------------- */
-export const tokenStore = {
-  get(): string | null {
-    try {
-      return localStorage.getItem(TOKEN_KEY)
-    } catch {
-      return null
-    }
-  },
-  set(token: string) {
-    try {
-      localStorage.setItem(TOKEN_KEY, token)
-    } catch {
-      /* private browsing — session still works in memory for this page load */
-    }
-  },
-  clear() {
-    try {
-      localStorage.removeItem(TOKEN_KEY)
-    } catch {
-      /* ignore */
-    }
-  },
+/**
+ * A fresh Firebase ID token for the current request. The SDK caches this
+ * token in memory and only round-trips to Firebase to refresh it when it's
+ * near expiry (~55+ minutes old), so calling this on every request is cheap
+ * — there is no separate token store to keep in sync the way a hand-rolled
+ * JWT would need.
+ */
+async function getAuthToken(): Promise<string | null> {
+  const user = auth.currentUser
+  if (!user) return null
+  try {
+    return await user.getIdToken()
+  } catch {
+    return null
+  }
 }
 
 export const anonymizedStore = {
@@ -93,7 +85,7 @@ type RequestOptions = Omit<RequestInit, 'body'> & {
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, raw, headers, ...rest } = options
-  const token = tokenStore.get()
+  const token = await getAuthToken()
 
   const finalHeaders = new Headers(headers)
   if (token) finalHeaders.set('Authorization', `Bearer ${token}`)
@@ -111,8 +103,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const response = await fetch(`${API_BASE}/api${path}`, { ...rest, headers: finalHeaders, body: payload })
 
   if (response.status === 401) {
-    tokenStore.clear()
-    // Let the app shell react rather than hard-navigating mid-render.
+    // Firebase, not this client, owns the session — sign out locally so the
+    // app shell reacts, rather than hard-navigating mid-render.
+    void auth.signOut()
     window.dispatchEvent(new CustomEvent('talentrank:unauthorized'))
     throw new ApiError('Your session has expired. Please sign in again.', 401)
   }
@@ -161,14 +154,11 @@ export const api = {
   health: () => request<HealthStatus>('/health'),
 
   auth: {
-    login: (email: string, password: string) =>
-      request<AuthResponse>('/auth/login', { method: 'POST', body: { email, password } }),
-    register: (payload: {
-      email: string
-      password: string
-      full_name: string
-      role: 'recruiter' | 'candidate'
-    }) => request<AuthResponse>('/auth/register', { method: 'POST', body: payload }),
+    // Login itself is a client-side Firebase call (see hooks/providers.tsx) —
+    // there's no backend endpoint for it. These two are what the backend
+    // actually needs: provisioning a profile once, and fetching it after.
+    register: (payload: { full_name: string; role: 'recruiter' | 'candidate' }) =>
+      request<User>('/auth/register', { method: 'POST', body: payload }),
     me: () => request<User>('/auth/me'),
   },
 
@@ -253,7 +243,7 @@ export const api = {
  * A plain <a download> cannot carry the bearer token.
  */
 export async function downloadFile(url: string, filename: string) {
-  const token = tokenStore.get()
+  const token = await getAuthToken()
   const headers = new Headers()
   if (token) headers.set('Authorization', `Bearer ${token}`)
 

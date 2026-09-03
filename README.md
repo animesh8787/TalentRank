@@ -22,7 +22,18 @@ the backend below is deployed too — see [Live deployment](#live-deployment))
 
 ## Quick start
 
-Two terminals. Nothing else to install or configure — it runs on SQLite by default.
+Sign-in is Firebase Authentication — the app authenticates real people, not
+seeded passwords, so a Firebase project is required even for local dev. It's
+free and takes a couple of minutes:
+
+**0. Firebase project (one-time)**
+
+1. Create a project at [console.firebase.google.com](https://console.firebase.google.com)
+2. **Authentication > Sign-in method** — enable **Email/Password**
+3. **Project settings > General > Your apps** — add a web app, copy the config
+4. **Project settings > Service accounts** — click **Generate new private key**,
+   save the downloaded file as `backend/firebase-service-account.json`
+   (already gitignored — it's a secret, never commit it)
 
 **1. Backend**
 
@@ -44,29 +55,29 @@ cd backend && python -m uvicorn app.main:app --reload --port 8000
 cd frontend && npm install
 ```
 
+Copy `frontend/.env.example` to `frontend/.env.local` and fill in the four
+`VITE_FIREBASE_*` values from step 0.3 above.
+
 ```bash
 cd frontend && npm run dev
 ```
 
-Open http://localhost:5173.
+Open http://localhost:5173, click **Register**, and create your account — pick
+"Recruiter" to see the full dashboard. To make that account an admin:
 
-The seed script creates the demo users and three roles, then ingests any resumes
-found in `src/components/datafiles/Input_files/sample resume/` and scores every
-pairing. **That folder is gitignored** — resumes contain real names, emails and
-phone numbers, so they are not published with the repository. Drop your own PDFs
-or DOCX files there before seeding, or skip it and upload through the UI:
+```bash
+cd backend && python -m app.promote_admin you@example.com
+```
+
+The seed script creates three roles and ingests any resumes found in
+`src/components/datafiles/Input_files/sample resume/`, scoring every pairing.
+**That folder is gitignored** — resumes contain real names, emails and phone
+numbers, so they are not published with the repository. Drop your own PDFs or
+DOCX files there before seeding, or skip it and upload through the UI:
 
 ```bash
 cd backend && python -m app.seed --no-resumes
 ```
-
-### Demo accounts
-
-| Role | Email | Password |
-|---|---|---|
-| Recruiter | `recruiter@talentrank.dev` | `recruit12345` |
-| Admin | `admin@talentrank.dev` | `admin12345` |
-| Candidate | `candidate@talentrank.dev` | `candidate12345` |
 
 API docs are at http://localhost:8000/docs.
 
@@ -140,7 +151,8 @@ frontend/                      React 19 · Vite · TypeScript · Tailwind · Rad
 backend/
   app/models.py                Single SQLAlchemy 2.0 schema
   app/schemas.py               Pydantic request/response models
-  app/core/                    Config, database, JWT + PBKDF2 auth
+  app/core/                    Config, database, Firebase token verification
+  app/promote_admin.py         CLI: promote a registered user to admin
   app/services/
     taxonomy.py                Skills, aliases, regex patterns, gazetteers
     extraction.py              PDF/DOCX → text (pypdf, python-docx)
@@ -167,15 +179,15 @@ Everything is optional — copy `backend/.env.example` to `backend/.env` to chan
 | Variable | Default | Notes |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./storage/talentrank.db` | Any SQLAlchemy URL. For MySQL: `pip install PyMySQL` then `mysql+pymysql://user:pass@localhost:3306/resume_db` |
-| `SECRET_KEY` | `dev-secret-change-me` | **Change before exposing the app to a network** |
+| `FIREBASE_CREDENTIALS_FILE` | `./firebase-service-account.json` | Service account key for verifying sign-ins — see Quick start, step 0 |
 | `EMBEDDINGS_ENABLED` | `true` | `false` forces the offline TF-IDF path |
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Any sentence-transformers model |
 | `STORAGE_DIR` | `./storage/resumes` | Where uploaded files are written |
 | `CORS_ORIGINS` | `http://localhost:5173,…` | Comma-separated |
 
-The frontend reads one build-time variable, `VITE_API_URL` — the backend's base URL
-(e.g. `https://talentrank-api.onrender.com`). Leave it unset for local dev; Vite's
-proxy handles `/api` for you (see `frontend/vite.config.ts`).
+The frontend reads `VITE_API_URL` (the backend's base URL — leave unset locally;
+Vite's proxy handles `/api`) plus four `VITE_FIREBASE_*` values from the Firebase
+web app config (public, safe to embed in the bundle — see `frontend/.env.example`).
 
 ---
 
@@ -189,20 +201,26 @@ over SSE, none of which fit a serverless function. Two free-tier services cover 
 
 **1. Backend (Render).** Click the button above — it reads [`render.yaml`](render.yaml)
 and creates the API under *your own* Render account (sign-up is Render's, not
-something I can do on your behalf). Free-tier trade-offs, so the demo actually
-works within 512MB RAM: `EMBEDDINGS_ENABLED=false` (keyword/TF-IDF matching instead
-of the sentence-transformer), a cold start of ~30-60s after 15 minutes idle, and an
+something I can do on your behalf). It'll prompt for two env vars marked `sync: false`
+in the blueprint:
+- `FIREBASE_CREDENTIALS_JSON` — paste the full contents of your service-account key
+  (Render's blueprint can set env vars but not provision a secret file, so this is
+  the same JSON `backend/.env.example` points at locally, just inlined)
+- `CORS_ORIGINS` — your Vercel domain (from step 2 below)
+
+Free-tier trade-offs, so the demo actually works within 512MB RAM:
+`EMBEDDINGS_ENABLED=false` (keyword/TF-IDF matching instead of the
+sentence-transformer), a cold start of ~30-60s after 15 minutes idle, and an
 ephemeral disk — SQLite data resets on redeploy. For persistent data, point
 `DATABASE_URL` at a free hosted Postgres (e.g. [Neon](https://neon.tech) or
 [Supabase](https://supabase.com)) instead.
 
 **2. Frontend (Vercel).** Already deployed: https://frontend-lake-phi-56.vercel.app.
 It's a static build with no backend wired up yet, so every API call fails until step 1
-is done. To point it at your backend once it's up: in the Vercel project's settings,
-add the environment variable `VITE_API_URL=<your Render URL>` and redeploy (`vercel
---prod` from `frontend/`, or trigger it from the dashboard). Finally, back on Render,
-set `CORS_ORIGINS` to your Vercel domain (it's marked `sync: false` in the blueprint,
-so it's not set automatically) and restart the service.
+is done. In the Vercel project's settings, add `VITE_API_URL=<your Render URL>` plus
+the four `VITE_FIREBASE_*` values (same as `frontend/.env.example`), then redeploy
+(`vercel --prod` from `frontend/`, or trigger it from the dashboard). Finally, back on
+Render, set `CORS_ORIGINS` to your Vercel domain and restart the service.
 
 ---
 
@@ -218,8 +236,9 @@ so it's not set automatically) and restart the service.
   places for entity extraction that barely fed the score. Rule-based extraction over
   a curated taxonomy plus sentence embeddings does better here without a 560 MB
   model download.
-- **Passwords use PBKDF2-HMAC-SHA256** from the standard library rather than bcrypt,
-  which avoids a native build step on Windows without weakening the hash.
+- **Authentication is Firebase, not a hand-rolled JWT.** The backend never sees a
+  password — it only verifies ID tokens the frontend gets from Firebase. Your own
+  `User`/`Candidate`/role model is unaffected; Firebase only replaces the login box.
 - The original Streamlit apps and the `preprocessing/` package are left in place for
   reference; nothing in `backend/` or `frontend/` depends on them.
 

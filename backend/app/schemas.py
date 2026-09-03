@@ -3,10 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import JobStatus, PipelineStage, ProcessingStatus, UserRole
-from app.services.taxonomy import EMAIL_RE
 
 
 class ORMModel(BaseModel):
@@ -24,32 +23,14 @@ class UserOut(ORMModel):
     is_active: bool
 
 
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-
 class RegisterRequest(BaseModel):
-    email: str = Field(min_length=5, max_length=255)
-    password: str = Field(min_length=8, max_length=128)
+    """Provisions a TalentRank profile for an already-created Firebase account.
+
+    No email or password here — Firebase already verified those client-side;
+    the caller is identified by their bearer token, not this body.
+    """
     full_name: str = Field(min_length=1, max_length=255)
     role: UserRole = UserRole.CANDIDATE
-
-    @field_validator("email")
-    @classmethod
-    def _valid_email(cls, value: str) -> str:
-        # Uses the same pattern as resume parsing rather than pulling in the
-        # optional email-validator dependency for one field.
-        value = value.strip().lower()
-        if not EMAIL_RE.fullmatch(value):
-            raise ValueError("Enter a valid email address.")
-        return value
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: UserOut
 
 
 # --------------------------------------------------------------------------- #

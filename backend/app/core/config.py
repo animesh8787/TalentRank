@@ -46,8 +46,15 @@ def _resolve(raw: str) -> Path:
 @dataclass(frozen=True)
 class Settings:
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./storage/talentrank.db")
-    secret_key: str = os.getenv("SECRET_KEY", "dev-secret-change-me")
-    access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10080"))
+    firebase_credentials_file: Path = field(
+        default_factory=lambda: _resolve(
+            os.getenv("FIREBASE_CREDENTIALS_FILE", "./firebase-service-account.json")
+        )
+    )
+    # Alternative to the file above: the service account JSON's raw content,
+    # for hosts (Render, etc.) whose blueprints can set env vars but can't
+    # provision a secret file. Takes priority over the file when set.
+    firebase_credentials_json: str | None = os.getenv("FIREBASE_CREDENTIALS_JSON")
     storage_dir: Path = field(default_factory=lambda: _resolve(os.getenv("STORAGE_DIR", "./storage/resumes")))
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     embeddings_enabled: bool = field(default_factory=lambda: _bool("EMBEDDINGS_ENABLED", True))

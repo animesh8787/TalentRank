@@ -161,7 +161,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
             <ThemeToggle />
             <Separator orientation="vertical" className="h-6" />
-            <UserMenu onLogout={() => { logout(); navigate('/login') }} />
+            <UserMenu onLogout={async () => { await logout(); navigate('/login') }} />
           </div>
         </header>
 

@@ -30,12 +30,6 @@ export interface User {
   is_active: boolean
 }
 
-export interface AuthResponse {
-  access_token: string
-  token_type: string
-  user: User
-}
-
 export interface JobWeights {
   skills: number
   experience: number

@@ -1,8 +1,47 @@
 import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+} from 'firebase/auth'
 
-import { anonymizedStore, api, tokenStore } from '@/lib/api'
+import { anonymizedStore, api, ApiError } from '@/lib/api'
+import { auth } from '@/lib/firebase'
 import type { User, UserRole } from '@/types'
+
+/** Firebase's own error codes ("auth/wrong-password" etc.) are not something
+ * to show a person directly — map the ones worth distinguishing. */
+export function friendlyAuthError(error: unknown): string {
+  const code = (error as { code?: string })?.code
+  switch (code) {
+    case 'auth/invalid-api-key':
+    case 'auth/api-key-not-valid.-please-pass-a-valid-api-key.':
+    case 'auth/configuration-not-found':
+      return 'Firebase is not configured yet — see frontend/.env.example.'
+    case 'auth/invalid-email':
+      return 'That email address looks invalid.'
+    case 'auth/user-disabled':
+      return 'This account has been disabled.'
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+      return 'Incorrect email or password.'
+    case 'auth/email-already-in-use':
+      return 'An account with that email already exists — try signing in instead.'
+    case 'auth/weak-password':
+      return 'Please use at least 8 characters.'
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please wait a moment and try again.'
+    case 'auth/network-request-failed':
+      return 'Network error — check your connection and try again.'
+    default:
+      return error instanceof Error ? error.message : 'Something went wrong.'
+  }
+}
 
 /* -------------------------------------------------------------------------- */
 /* Theme                                                                      */
@@ -69,7 +108,8 @@ interface AuthValue {
     full_name: string
     role: 'recruiter' | 'candidate'
   }) => Promise<User>
-  logout: () => void
+  logout: () => Promise<void>
+  resetPassword: (email: string) => Promise<void>
 }
 
 const AuthContext = React.createContext<AuthValue>({
@@ -82,7 +122,8 @@ const AuthContext = React.createContext<AuthValue>({
   register: async () => {
     throw new Error('AuthProvider missing')
   },
-  logout: () => {},
+  logout: async () => {},
+  resetPassword: async () => {},
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -90,46 +131,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = React.useState(true)
   const queryClient = useQueryClient()
 
-  // Restore the session on first paint if a token is present.
-  React.useEffect(() => {
-    let cancelled = false
-    if (!tokenStore.get()) {
-      setLoading(false)
-      return
-    }
-    api.auth
-      .me()
-      .then((me) => {
-        if (!cancelled) setUser(me)
-      })
-      .catch(() => {
-        tokenStore.clear()
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  // login()/register() below set this while they're running, and own the
+  // resulting state transition themselves. Without this guard, Firebase's own
+  // onAuthStateChanged fires the instant createUserWithEmailAndPassword
+  // succeeds — racing the explicit register() call below — and calls
+  // /auth/me before the profile has been provisioned. That 401 is completely
+  // normal mid-registration, not a sign of a broken account, but the naive
+  // "401 means sign out" handling here would do exactly that: sign the
+  // brand-new user back out from under their own registration.
+  const authActionInProgress = React.useRef(false)
 
-  // A 401 anywhere in the app drops the session exactly once.
+  // Firebase is the source of truth for whether a session exists — it
+  // restores itself from IndexedDB and calls this on every sign-in, sign-out,
+  // and page load, so there's no separate "is there a token?" check needed.
   React.useEffect(() => {
-    const onUnauthorized = () => {
-      setUser(null)
-      queryClient.clear()
-    }
-    window.addEventListener('talentrank:unauthorized', onUnauthorized)
-    return () => window.removeEventListener('talentrank:unauthorized', onUnauthorized)
-  }, [queryClient])
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (authActionInProgress.current) return
+
+      if (!firebaseUser) {
+        setUser(null)
+        setLoading(false)
+        return
+      }
+      try {
+        const profile = await api.auth.me()
+        setUser(profile)
+      } catch (error) {
+        // A verified Firebase account with no TalentRank profile yet, and not
+        // from an in-progress registration (that's the guard above) — e.g. a
+        // Firebase user created some other way. Don't leave the app stuck:
+        // sign out locally and send them back to register.
+        if (error instanceof ApiError && error.status === 401) {
+          await signOut(auth)
+        }
+        setUser(null)
+      } finally {
+        setLoading(false)
+      }
+    })
+    return unsubscribe
+  }, [])
 
   const login = React.useCallback(
     async (email: string, password: string) => {
-      const result = await api.auth.login(email, password)
-      tokenStore.set(result.access_token)
-      setUser(result.user)
-      queryClient.clear()
-      return result.user
+      authActionInProgress.current = true
+      try {
+        await signInWithEmailAndPassword(auth, email, password)
+        const profile = await api.auth.me()
+        setUser(profile)
+        queryClient.clear()
+        return profile
+      } finally {
+        authActionInProgress.current = false
+      }
     },
     [queryClient],
   )
@@ -141,19 +195,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       full_name: string
       role: 'recruiter' | 'candidate'
     }) => {
-      const result = await api.auth.register(payload)
-      tokenStore.set(result.access_token)
-      setUser(result.user)
-      queryClient.clear()
-      return result.user
+      authActionInProgress.current = true
+      try {
+        const credential = await createUserWithEmailAndPassword(auth, payload.email, payload.password)
+        await updateProfile(credential.user, { displayName: payload.full_name })
+        const profile = await api.auth.register({ full_name: payload.full_name, role: payload.role })
+        setUser(profile)
+        queryClient.clear()
+        return profile
+      } finally {
+        authActionInProgress.current = false
+      }
     },
     [queryClient],
   )
 
-  const logout = React.useCallback(() => {
-    tokenStore.clear()
+  const logout = React.useCallback(async () => {
+    await signOut(auth)
     setUser(null)
     queryClient.clear()
+  }, [queryClient])
+
+  const resetPassword = React.useCallback(async (email: string) => {
+    await sendPasswordResetEmail(auth, email)
+  }, [])
+
+  // A 401 from any API call (session expired, token revoked) drops the
+  // session exactly once, without a full-page reload.
+  React.useEffect(() => {
+    const onUnauthorized = () => {
+      setUser(null)
+      queryClient.clear()
+    }
+    window.addEventListener('talentrank:unauthorized', onUnauthorized)
+    return () => window.removeEventListener('talentrank:unauthorized', onUnauthorized)
   }, [queryClient])
 
   const value = React.useMemo<AuthValue>(
@@ -164,8 +239,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       register,
       logout,
+      resetPassword,
     }),
-    [user, loading, login, register, logout],
+    [user, loading, login, register, logout, resetPassword],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

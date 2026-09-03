@@ -1,12 +1,12 @@
 import * as React from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { CheckCircle2, FileSearch, Loader2, ShieldCheck, Sparkles, Users } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, FileSearch, ShieldCheck, Sparkles, Users } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { useAuth } from '@/hooks/providers'
+import { friendlyAuthError, useAuth } from '@/hooks/providers'
+import { isFirebaseConfigured } from '@/lib/firebase'
 import {
   Button,
-  Card,
   Field,
   Input,
   Select,
@@ -19,18 +19,13 @@ import {
   TabsTrigger,
 } from '@/components/ui/primitives'
 
-const DEMO_ACCOUNTS = [
-  { label: 'Recruiter', email: 'recruiter@talentrank.dev', password: 'recruit12345' },
-  { label: 'Admin', email: 'admin@talentrank.dev', password: 'admin12345' },
-  { label: 'Candidate', email: 'candidate@talentrank.dev', password: 'candidate12345' },
-]
-
 export function LoginPage() {
-  const { login, register } = useAuth()
+  const { login, register, resetPassword } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [mode, setMode] = React.useState<'login' | 'register'>('login')
   const [pending, setPending] = React.useState(false)
+  const [resetting, setResetting] = React.useState(false)
   const [errors, setErrors] = React.useState<Record<string, string>>({})
 
   const [email, setEmail] = React.useState('')
@@ -72,7 +67,7 @@ export function LoginPage() {
       const isStaff = user.role === 'recruiter' || user.role === 'admin'
       navigate(from ?? (isStaff ? '/' : '/my-resume'), { replace: true })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Something went wrong.'
+      const message = friendlyAuthError(error)
       setErrors({ form: message })
       toast.error(mode === 'login' ? 'Sign in failed' : 'Could not create account', {
         description: message,
@@ -82,11 +77,22 @@ export function LoginPage() {
     }
   }
 
-  function useDemo(account: (typeof DEMO_ACCOUNTS)[number]) {
-    setMode('login')
-    setEmail(account.email)
-    setPassword(account.password)
-    setErrors({})
+  async function handleForgotPassword() {
+    if (!email.trim()) {
+      setErrors({ email: 'Enter your email address first, then click "Forgot password?" again.' })
+      return
+    }
+    setResetting(true)
+    try {
+      await resetPassword(email.trim())
+      toast.success('Password reset email sent', {
+        description: `Check ${email.trim()} for a link to choose a new password.`,
+      })
+    } catch (error) {
+      toast.error('Could not send reset email', { description: friendlyAuthError(error) })
+    } finally {
+      setResetting(false)
+    }
   }
 
   return (
@@ -147,6 +153,22 @@ export function LoginPage() {
               <span className="text-lg font-extrabold tracking-tight">TalentRank</span>
             </div>
           </div>
+
+          {!isFirebaseConfigured && (
+            <div
+              role="alert"
+              className="flex items-start gap-2.5 rounded-md border border-warning/30 bg-warning/10 px-3 py-2.5 text-sm text-warning"
+            >
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <div>
+                <p className="font-semibold">Firebase isn't configured yet</p>
+                <p className="mt-0.5 text-xs">
+                  Sign-in won't work until <code>VITE_FIREBASE_*</code> env vars are set — see{' '}
+                  <code>frontend/.env.example</code>.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div>
             <h2 className="text-xl font-extrabold tracking-tight">
@@ -213,6 +235,17 @@ export function LoginPage() {
               />
             </Field>
 
+            {mode === 'login' && (
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={resetting}
+                className="cursor-pointer text-xs font-medium text-primary underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {resetting ? 'Sending…' : 'Forgot password?'}
+              </button>
+            )}
+
             {mode === 'register' && (
               <Field label="I am a" htmlFor="role">
                 <Select value={role} onValueChange={(value) => setRole(value as typeof role)}>
@@ -231,23 +264,6 @@ export function LoginPage() {
               {mode === 'login' ? 'Sign in' : 'Create account'}
             </Button>
           </form>
-
-          <Card className="p-3">
-            <p className="mb-2 text-xs font-semibold text-muted-foreground">Demo accounts</p>
-            <div className="flex flex-wrap gap-1.5">
-              {DEMO_ACCOUNTS.map((account) => (
-                <Button
-                  key={account.email}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => useDemo(account)}
-                >
-                  {account.label}
-                </Button>
-              ))}
-            </div>
-          </Card>
         </div>
       </main>
     </div>

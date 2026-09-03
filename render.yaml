@@ -26,11 +26,11 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
-      - key: SECRET_KEY
-        generateValue: true
       - key: DATABASE_URL
         value: sqlite:///./storage/talentrank.db
       - key: EMBEDDINGS_ENABLED
         value: "false"
       - key: CORS_ORIGINS
         sync: false # set to your deployed frontend URL after the first deploy
+      - key: FIREBASE_CREDENTIALS_JSON
+        sync: false # paste the full contents of your Firebase service-account JSON here

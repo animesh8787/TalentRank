@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import decode_access_token
+from app.core.firebase import FirebaseClaims, FirebaseNotConfigured, verify_id_token
 from app.models import AuditEvent, User, UserRole
 
 _bearer = HTTPBearer(auto_error=False)
@@ -17,26 +18,39 @@ _CREDENTIALS_ERROR = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
+_NOT_REGISTERED_ERROR = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="This Firebase account has no TalentRank profile yet. Call /auth/register first.",
+)
 
-def get_current_user(
+
+def get_firebase_claims(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    db: Session = Depends(get_db),
-) -> User:
+) -> FirebaseClaims:
+    """Verify the bearer token against Firebase. Does not require a local User row."""
     if credentials is None or not credentials.credentials:
         raise _CREDENTIALS_ERROR
 
-    payload = decode_access_token(credentials.credentials)
-    if not payload or "sub" not in payload:
-        raise _CREDENTIALS_ERROR
-
     try:
-        user_id = int(payload["sub"])
-    except (TypeError, ValueError):
-        raise _CREDENTIALS_ERROR from None
+        claims = verify_id_token(credentials.credentials)
+    except FirebaseNotConfigured as exc:
+        # A config problem, not an auth problem — worth a distinct message so
+        # it isn't mistaken for a bad token during setup.
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
-    user = db.get(User, user_id)
-    if user is None or not user.is_active:
+    if claims is None:
         raise _CREDENTIALS_ERROR
+    return claims
+
+
+def get_current_user(
+    claims: FirebaseClaims = Depends(get_firebase_claims),
+    db: Session = Depends(get_db),
+) -> User:
+    """The full guard: valid Firebase token AND an existing TalentRank profile."""
+    user = db.scalar(select(User).where(User.firebase_uid == claims.uid))
+    if user is None or not user.is_active:
+        raise _NOT_REGISTERED_ERROR
     return user
 
 

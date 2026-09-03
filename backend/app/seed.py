@@ -1,8 +1,13 @@
-"""Seed the database with demo users, jobs and the bundled sample resumes.
+"""Seed the database with demo jobs and the bundled sample resumes.
 
-    python -m app.seed              # users + jobs + sample resumes
-    python -m app.seed --no-resumes # users + jobs only
+Auth accounts are no longer created here — Firebase owns sign-up now, so
+there's nothing to seed a password into. Register through the app UI instead
+(see README), then optionally promote yourself to admin:
+
+    python -m app.seed              # jobs + sample resumes
+    python -m app.seed --no-resumes # jobs only
     python -m app.seed --reset      # wipe first
+    python -m app.promote_admin you@example.com
 """
 from __future__ import annotations
 
@@ -14,17 +19,10 @@ from sqlalchemy import select
 
 from app.core.config import BACKEND_DIR, settings
 from app.core.database import SessionLocal, engine
-from app.core.security import hash_password
-from app.models import Base, Candidate, Job, JobStatus, ProcessingStatus, Upload, User, UserRole
+from app.models import Base, Candidate, Job, JobStatus, ProcessingStatus, Upload
 from app.services import pipeline, ranking
 
 SAMPLE_DIR = BACKEND_DIR.parent / "src" / "components" / "datafiles" / "Input_files" / "sample resume"
-
-DEMO_USERS = [
-    ("admin@talentrank.dev", "Admin User", "admin12345", UserRole.ADMIN),
-    ("recruiter@talentrank.dev", "Riya Recruiter", "recruit12345", UserRole.RECRUITER),
-    ("candidate@talentrank.dev", "Sam Candidate", "candidate12345", UserRole.CANDIDATE),
-]
 
 DEMO_JOBS = [
     {
@@ -84,28 +82,7 @@ DEMO_JOBS = [
 ]
 
 
-def seed_users(db) -> dict[str, User]:
-    created: dict[str, User] = {}
-    for email, name, password, role in DEMO_USERS:
-        user = db.scalar(select(User).where(User.email == email))
-        if user is None:
-            user = User(
-                email=email,
-                full_name=name,
-                password_hash=hash_password(password),
-                role=role,
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-            print(f"  user     {email:<32} ({role.value})  password: {password}")
-        else:
-            print(f"  user     {email:<32} already exists")
-        created[role.value] = user
-    return created
-
-
-def seed_jobs(db, owner: User) -> list[Job]:
+def seed_jobs(db) -> list[Job]:
     jobs: list[Job] = []
     for spec in DEMO_JOBS:
         existing = db.scalar(select(Job).where(Job.title == spec["title"]))
@@ -113,7 +90,7 @@ def seed_jobs(db, owner: User) -> list[Job]:
             print(f"  job      {spec['title']:<32} already exists")
             jobs.append(existing)
             continue
-        job = Job(**spec, status=JobStatus.ACTIVE, created_by_id=owner.id)
+        job = Job(**spec, status=JobStatus.ACTIVE)  # created_by_id left null: no seeded user to own it
         db.add(job)
         db.commit()
         db.refresh(job)
@@ -122,7 +99,7 @@ def seed_jobs(db, owner: User) -> list[Job]:
     return jobs
 
 
-def seed_resumes(db, uploader: User) -> int:
+def seed_resumes(db) -> int:
     if not SAMPLE_DIR.is_dir():
         print(f"  ! sample resume directory not found: {SAMPLE_DIR}")
         return 0
@@ -151,7 +128,6 @@ def seed_resumes(db, uploader: User) -> int:
             size_bytes=destination.stat().st_size,
             content_type="application/pdf" if path.suffix.lower() == ".pdf" else None,
             status=ProcessingStatus.QUEUED,
-            uploaded_by_id=uploader.id,
         )
         db.add(record)
         db.commit()
@@ -183,12 +159,10 @@ def main() -> int:
 
     db = SessionLocal()
     try:
-        users = seed_users(db)
-        owner = users.get("admin") or users.get("recruiter")
-        jobs = seed_jobs(db, owner)
+        jobs = seed_jobs(db)
 
         if not args.no_resumes:
-            seed_resumes(db, owner)
+            seed_resumes(db)
 
         print("\n  scoring candidates against every job ...")
         for job in jobs:
@@ -198,6 +172,11 @@ def main() -> int:
 
         total = db.scalar(select(Candidate).with_only_columns(Candidate.id)) is not None
         print("\nDone." if total else "\nDone (no candidates ingested).")
+        print(
+            "\nNo user accounts were created — sign up through the app (Firebase-backed). "
+            "To make your account an admin afterwards:\n"
+            "    python -m app.promote_admin you@example.com"
+        )
     finally:
         db.close()
     return 0

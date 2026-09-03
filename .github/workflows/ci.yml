@@ -44,7 +44,6 @@ jobs:
       - name: Verify the app initialises and every route module imports
         env:
           EMBEDDINGS_ENABLED: "false"
-          SECRET_KEY: ci-test-secret
         run: |
           python -c "
           from app.main import app

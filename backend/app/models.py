@@ -74,9 +74,11 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Firebase owns identity and password verification; this is the only link
+    # between "who Firebase says this is" and our own role/profile data.
+    firebase_uid: Mapped[str] = mapped_column(String(128), unique=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255))
-    password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.RECRUITER)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
