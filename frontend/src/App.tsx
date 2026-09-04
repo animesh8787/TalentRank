@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react'
 
 import { useAuth } from '@/hooks/providers'
 import { AppShell } from '@/components/app/AppShell'
+import { LandingPage } from '@/pages/LandingPage'
 import { LoginPage } from '@/pages/LoginPage'
 
 // Route-level splitting. The charting library alone is ~400kB and is only
@@ -72,8 +73,14 @@ export default function App() {
   return (
     <Routes>
       <Route
+        path="/"
+        element={
+          user ? <Navigate to={isStaff ? '/dashboard' : '/my-resume'} replace /> : <LandingPage />
+        }
+      />
+      <Route
         path="/login"
-        element={user ? <Navigate to={isStaff ? '/' : '/my-resume'} replace /> : <LoginPage />}
+        element={user ? <Navigate to={isStaff ? '/dashboard' : '/my-resume'} replace /> : <LoginPage />}
       />
       <Route
         path="/*"
@@ -82,7 +89,7 @@ export default function App() {
             <AppShell>
               <Suspense fallback={<RouteFallback />}>
                 <Routes>
-                  <Route path="/" element={<RequireAuth staff><DashboardPage /></RequireAuth>} />
+                  <Route path="/dashboard" element={<RequireAuth staff><DashboardPage /></RequireAuth>} />
                   <Route path="/jobs" element={<RequireAuth staff><JobsPage /></RequireAuth>} />
                   <Route path="/jobs/:jobId" element={<RequireAuth staff><JobDetailPage /></RequireAuth>} />
                   <Route path="/candidates" element={<RequireAuth staff><CandidatesPage /></RequireAuth>} />

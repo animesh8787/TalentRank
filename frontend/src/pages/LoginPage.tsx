@@ -1,6 +1,6 @@
 import * as React from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, FileSearch, ShieldCheck, Sparkles, Users } from 'lucide-react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { AlertTriangle, ArrowLeft, CheckCircle2, FileSearch, ShieldCheck, Sparkles, Users } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { friendlyAuthError, useAuth } from '@/hooks/providers'
@@ -23,7 +23,12 @@ export function LoginPage() {
   const { login, register, resetPassword } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [mode, setMode] = React.useState<'login' | 'register'>('login')
+  const [searchParams] = useSearchParams()
+  // Landing-page CTAs link here with ?mode=register to land straight on the
+  // right tab instead of making someone click "Register" a second time.
+  const [mode, setMode] = React.useState<'login' | 'register'>(
+    searchParams.get('mode') === 'register' ? 'register' : 'login',
+  )
   const [pending, setPending] = React.useState(false)
   const [resetting, setResetting] = React.useState(false)
   const [errors, setErrors] = React.useState<Record<string, string>>({})
@@ -65,7 +70,7 @@ export function LoginPage() {
             })
       toast.success(`Welcome, ${user.full_name}`)
       const isStaff = user.role === 'recruiter' || user.role === 'admin'
-      navigate(from ?? (isStaff ? '/' : '/my-resume'), { replace: true })
+      navigate(from ?? (isStaff ? '/dashboard' : '/my-resume'), { replace: true })
     } catch (error) {
       const message = friendlyAuthError(error)
       setErrors({ form: message })
@@ -145,6 +150,14 @@ export function LoginPage() {
       {/* Form */}
       <main className="flex items-center justify-center bg-background p-6">
         <div className="w-full max-w-sm space-y-6">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-3.5" aria-hidden="true" />
+            Back to home
+          </Link>
+
           <div className="lg:hidden">
             <div className="mb-4 flex items-center gap-2">
               <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">

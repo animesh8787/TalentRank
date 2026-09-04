@@ -14,7 +14,7 @@ export function NotFoundPage() {
         description="That URL does not match anything in TalentRank. It may have been renamed or removed."
         action={
           <Button asChild>
-            <Link to="/">Back to dashboard</Link>
+            <Link to="/dashboard">Back to dashboard</Link>
           </Button>
         }
       />
