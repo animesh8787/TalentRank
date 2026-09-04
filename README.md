@@ -3,7 +3,7 @@
 [![CI](https://github.com/animesh8787/TalentRank/actions/workflows/ci.yml/badge.svg)](https://github.com/animesh8787/TalentRank/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Live demo](https://img.shields.io/badge/frontend-live-brightgreen)](https://frontend-lake-phi-56.vercel.app)
-[![API status](https://img.shields.io/badge/API-not_deployed_yet-lightgrey)](#live-deployment)
+[![API status](https://img.shields.io/badge/API-live-brightgreen)](https://talentrank-api.onrender.com/api/health)
 [![Backend](https://img.shields.io/badge/backend-FastAPI-009688?logo=fastapi&logoColor=white)](backend)
 [![Frontend](https://img.shields.io/badge/frontend-React_19-61DAFB?logo=react&logoColor=black)](frontend)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](frontend)
@@ -15,8 +15,9 @@ and resume evidence produced every score.
 Originally an academic NLP project, rebuilt as a working product: a FastAPI backend
 with semantic matching and a React front end.
 
-**[Live frontend →](https://frontend-lake-phi-56.vercel.app)** (sign-in won't work until
-the backend below is deployed too — see [Live deployment](#live-deployment))
+**[Try it live →](https://frontend-lake-phi-56.vercel.app)** — fully deployed, register an
+account and rank a resume in under a minute. Note: the backend is on Render's free tier, so
+it sleeps after 15 minutes idle — the first request can take 30-60s to wake it up.
 
 ---
 
