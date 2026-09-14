@@ -1,0 +1,161 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Light palette — "trust blue + orange CTA" SaaS profile.
+     Every token is defined here first; dark mode only redefines values. */
+  :root {
+    --background: 210 40% 98%;          /* #F8FAFC */
+    --foreground: 217 33% 17%;          /* #1E293B */
+
+    --card: 0 0% 100%;
+    --card-foreground: 217 33% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 217 33% 17%;
+
+    --primary: 221 83% 53%;             /* #2563EB */
+    --primary-foreground: 0 0% 100%;
+    --primary-muted: 214 95% 93%;
+
+    --secondary: 214 32% 94%;
+    --secondary-foreground: 217 33% 17%;
+
+    --accent: 21 90% 48%;               /* #EA580C */
+    --accent-foreground: 0 0% 100%;
+
+    --muted: 213 47% 94%;               /* #E9EFF8 */
+    --muted-foreground: 215 16% 47%;    /* #475569 — 4.6:1 on --background */
+
+    --destructive: 0 72% 51%;           /* #DC2626 */
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 32%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 95% 38%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;              /* #E2E8F0 */
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+
+    --dim-skills: 221 83% 53%;
+    --dim-experience: 262 72% 55%;
+    --dim-education: 173 70% 33%;
+    --dim-semantic: 21 90% 48%;
+    --dim-location: 199 89% 41%;
+
+    --radius: 0.5rem;
+  }
+
+  /* Dark mode uses desaturated, lighter tonal variants rather than inverted
+     colours, and is contrast-checked independently of light mode. */
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 213 31% 91%;
+
+    --card: 222 44% 11%;
+    --card-foreground: 213 31% 91%;
+    --popover: 222 44% 11%;
+    --popover-foreground: 213 31% 91%;
+
+    --primary: 217 91% 63%;
+    --primary-foreground: 222 47% 8%;
+    --primary-muted: 222 47% 18%;
+
+    --secondary: 217 33% 18%;
+    --secondary-foreground: 213 31% 91%;
+
+    --accent: 25 95% 61%;
+    --accent-foreground: 222 47% 8%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 72%;    /* raised for 4.5:1 on dark card */
+
+    --destructive: 0 84% 65%;
+    --destructive-foreground: 222 47% 8%;
+    --success: 142 65% 55%;
+    --success-foreground: 222 47% 8%;
+    --warning: 38 92% 60%;
+    --warning-foreground: 222 47% 8%;
+
+    --border: 217 33% 22%;
+    --input: 217 33% 22%;
+    --ring: 217 91% 63%;
+
+    --dim-skills: 217 91% 63%;
+    --dim-experience: 258 90% 71%;
+    --dim-education: 172 66% 50%;
+    --dim-semantic: 25 95% 61%;
+    --dim-location: 199 89% 60%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    /* 16px base — smaller than this triggers iOS auto-zoom on inputs. */
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  /* Numbers in tables and score readouts must not shift width as they change. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    @apply font-mono;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  ::selection {
+    @apply bg-primary/20;
+  }
+}
+
+@layer components {
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-muted;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--card) / 0.6),
+      transparent
+    );
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border;
+  }
+}
+
+/* Honour the system reduced-motion setting for every animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

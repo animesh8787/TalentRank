@@ -1,0 +1,27 @@
+# --- Web framework ---
+fastapi>=0.115
+uvicorn[standard]>=0.32
+python-multipart>=0.0.9
+
+# --- Data layer ---
+SQLAlchemy>=2.0
+pydantic>=2.9
+
+# --- Auth ---
+firebase-admin>=6.5
+
+# --- Document parsing ---
+pypdf>=5.0
+python-docx>=1.1
+
+# --- NLP / matching ---
+sentence-transformers>=3.0
+scikit-learn>=1.5
+numpy>=1.26
+
+# --- Postgres driver (needed once DATABASE_URL points at Postgres, e.g. a
+# free Neon/Supabase instance for persistent data on Render's free tier) ---
+psycopg2-binary>=2.9
+
+# --- Optional: MySQL driver (only needed if DATABASE_URL points at MySQL) ---
+# PyMySQL>=1.1
