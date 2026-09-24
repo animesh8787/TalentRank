@@ -81,6 +81,11 @@ def score_pair(job: Job, candidate: Candidate, semantic: float) -> scoring.Score
         remote_ok=job.remote_ok,
         weights=job.weights,
         semantic_similarity=semantic,
+        nice_to_have_skills=job.nice_to_have_skills or [],
+        candidate_projects=[
+            {"name": p.name, "technologies": p.technologies or []} for p in candidate.projects
+        ],
+        candidate_certifications=[{"name": c.name} for c in candidate.certifications],
     )
 
 
@@ -97,6 +102,8 @@ def _upsert_match(db: Session, job: Job, candidate: Candidate, result: scoring.S
     match.education_score = result.dimensions["education"].score
     match.semantic_score = result.dimensions["semantic"].score
     match.location_score = result.dimensions["location"].score
+    match.projects_score = result.dimensions["projects"].score
+    match.certifications_score = result.dimensions["certifications"].score
     match.explanation = result.explanation()
     db.add(match)
     return match
@@ -173,6 +180,8 @@ def preview_weights(
             "education": match.education_score,
             "semantic": match.semantic_score,
             "location": match.location_score,
+            "projects": match.projects_score,
+            "certifications": match.certifications_score,
         }
         overall = sum(per_dimension[k] * normalised[k] for k in normalised)
         preview.append({

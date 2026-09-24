@@ -1,6 +1,8 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
+import type { DimensionKey } from '@/types'
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
@@ -82,12 +84,21 @@ export function formatSalary(min: number | null, max: number | null) {
   return `₹${format((min ?? max) as number)}`
 }
 
+/** Sum of a weight set as a 0-100 percentage — used to validate the
+ * "must total exactly 100%" rule both live in WeightSliders and again at
+ * submit time in JobForm, without duplicating the arithmetic. */
+export function weightsTotalPercent(weights: Record<DimensionKey, number>) {
+  return DIMENSION_META.reduce((sum, meta) => sum + (weights[meta.key] ?? 0), 0) * 100
+}
+
 export const DIMENSION_META = [
   { key: 'skills', label: 'Skills', color: 'hsl(var(--dim-skills))' },
   { key: 'experience', label: 'Experience', color: 'hsl(var(--dim-experience))' },
   { key: 'education', label: 'Education', color: 'hsl(var(--dim-education))' },
   { key: 'semantic', label: 'Relevance', color: 'hsl(var(--dim-semantic))' },
   { key: 'location', label: 'Location', color: 'hsl(var(--dim-location))' },
+  { key: 'projects', label: 'Projects', color: 'hsl(var(--dim-projects))' },
+  { key: 'certifications', label: 'Certifications', color: 'hsl(var(--dim-certifications))' },
 ] as const
 
 export const STAGE_META: Record<
@@ -105,3 +116,42 @@ export const STAGE_META: Record<
 export const STAGE_ORDER = [
   'new', 'shortlisted', 'interviewing', 'offer', 'hired', 'rejected',
 ] as const
+
+/** Candidate profile fields that make the "what should I do next" dashboard
+ * useful — each with the plain-language ask shown when it's missing. */
+export interface CompletenessInput {
+  full_name: string | null
+  email: string | null
+  phone: string | null
+  location: string | null
+  headline: string | null
+  total_experience: number
+  highest_qualification: string | null
+  linkedin_url: string | null
+  github_url: string | null
+  skills: unknown[]
+  experiences: unknown[]
+  educations: unknown[]
+  projects: unknown[]
+  certifications: unknown[]
+}
+
+export function profileCompleteness(candidate: CompletenessInput) {
+  const checks: { label: string; done: boolean }[] = [
+    { label: 'Add your name, email and phone', done: !!(candidate.full_name && candidate.email && candidate.phone) },
+    { label: 'Add your location', done: !!candidate.location },
+    { label: 'Add a headline describing your current role', done: !!candidate.headline },
+    { label: 'Confirm your years of experience', done: candidate.total_experience > 0 },
+    { label: 'Add your highest qualification', done: !!candidate.highest_qualification },
+    { label: 'List at least 5 skills', done: candidate.skills.length >= 5 },
+    { label: 'Add at least one work experience entry', done: candidate.experiences.length > 0 },
+    { label: 'Add your education history', done: candidate.educations.length > 0 },
+    { label: 'Add at least one project', done: candidate.projects.length > 0 },
+    { label: 'Add a LinkedIn or GitHub link', done: !!(candidate.linkedin_url || candidate.github_url) },
+  ]
+  const done = checks.filter((c) => c.done).length
+  return {
+    percent: Math.round((100 * done) / checks.length),
+    missing: checks.filter((c) => !c.done).map((c) => c.label),
+  }
+}

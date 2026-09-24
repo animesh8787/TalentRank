@@ -21,6 +21,12 @@ export type DimensionKey =
   | 'education'
   | 'semantic'
   | 'location'
+  | 'projects'
+  | 'certifications'
+
+export type EmploymentType = 'full_time' | 'part_time' | 'contract' | 'internship' | 'freelance'
+export type WorkMode = 'remote' | 'hybrid' | 'onsite'
+export type Seniority = 'internship' | 'entry' | 'junior' | 'mid' | 'senior' | 'lead'
 
 export interface User {
   id: number
@@ -36,16 +42,23 @@ export interface JobWeights {
   education: number
   semantic: number
   location: number
+  projects: number
+  certifications: number
 }
 
 export interface Job {
   id: number
   title: string
   department: string | null
+  industry: string | null
+  employment_type: EmploymentType | null
+  work_mode: WorkMode | null
+  seniority: Seniority | null
   description: string
   required_skills: string[]
   nice_to_have_skills: string[]
   required_experience: number
+  required_experience_max: number | null
   required_education: string | null
   location: string | null
   remote_ok: boolean
@@ -86,6 +99,24 @@ export interface EducationItem {
   graduation_year: string | null
 }
 
+export interface ProjectItem {
+  id: number
+  name: string
+  description: string | null
+  technologies: string[]
+  url: string | null
+  start_date: string | null
+  end_date: string | null
+}
+
+export interface CertificationItem {
+  id: number
+  name: string
+  issuer: string | null
+  issue_date: string | null
+  credential_url: string | null
+}
+
 export interface Candidate {
   id: number
   full_name: string | null
@@ -106,6 +137,8 @@ export interface Candidate {
   skills: Skill[]
   experiences: WorkExperienceItem[]
   educations: EducationItem[]
+  projects: ProjectItem[]
+  certifications: CertificationItem[]
   is_anonymized: boolean
 }
 
@@ -152,6 +185,8 @@ export interface Explanation {
   missing_skills: string[]
   evidence: { skill: string; snippet: string }[]
   summary: string
+  preferred_matched: MatchedSkill[]
+  preferred_missing: string[]
 }
 
 export interface Match {
@@ -164,6 +199,8 @@ export interface Match {
   education_score: number
   semantic_score: number
   location_score: number
+  projects_score: number
+  certifications_score: number
   stage: PipelineStage
   scored_at: string
   candidate: Candidate
@@ -262,4 +299,67 @@ export interface HealthStatus {
     loaded: boolean
     error: string | null
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Candidate-facing role matching: dashboard, "roles you match", skill gap    */
+/* -------------------------------------------------------------------------- */
+export interface SkillGapItem {
+  skill: string
+  required: boolean
+  status: 'strong' | 'developing' | 'missing'
+  similarity: number
+  evidence: string | null
+}
+
+export interface Recommendation {
+  category: string
+  priority: 'high' | 'medium' | 'low'
+  title: string
+  message: string
+}
+
+export interface RoleMatchJob {
+  id: number
+  title: string
+  department: string | null
+  location: string | null
+  remote_ok: boolean
+  employment_type: EmploymentType | null
+  work_mode: WorkMode | null
+  seniority: Seniority | null
+  required_skills: string[]
+  nice_to_have_skills: string[]
+  required_experience: number
+}
+
+export interface RoleMatch {
+  job: RoleMatchJob
+  overall_score: number
+  dimensions: Record<DimensionKey, DimensionScore>
+  summary: string
+  matched_skills: MatchedSkill[]
+  missing_skills: string[]
+  preferred_matched: MatchedSkill[]
+  preferred_missing: string[]
+  skill_gap: SkillGapItem[]
+  recommendations: Recommendation[]
+}
+
+/* -------------------------------------------------------------------------- */
+/* Recruiter-side JD intelligence                                             */
+/* -------------------------------------------------------------------------- */
+export interface JDParseResult {
+  title: string | null
+  seniority: Seniority | null
+  employment_type: EmploymentType | null
+  work_mode: WorkMode | null
+  location: string | null
+  required_experience: number
+  required_experience_max: number | null
+  required_education: string | null
+  required_skills: string[]
+  nice_to_have_skills: string[]
+  description: string
+  notes: string[]
 }

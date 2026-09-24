@@ -43,6 +43,8 @@
     --dim-education: 173 70% 33%;
     --dim-semantic: 21 90% 48%;
     --dim-location: 199 89% 41%;
+    --dim-projects: 152 60% 32%;
+    --dim-certifications: 330 75% 42%;
 
     --radius: 0.5rem;
   }
@@ -87,6 +89,8 @@
     --dim-education: 172 66% 50%;
     --dim-semantic: 25 95% 61%;
     --dim-location: 199 89% 60%;
+    --dim-projects: 150 65% 55%;
+    --dim-certifications: 330 80% 68%;
   }
 
   * {

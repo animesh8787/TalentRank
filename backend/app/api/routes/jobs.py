@@ -7,11 +7,30 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, record_audit, require_staff
 from app.core.database import get_db
-from app.models import Job, JobStatus, Match, PipelineStage, User
-from app.schemas import JobCreate, JobOut, JobUpdate, JobWeights
-from app.services import ranking, taxonomy as tx
+from app.models import Job, JobStatus, Match, PipelineStage, User, WorkMode
+from app.schemas import (
+    JDParseRequest,
+    JDParseResult,
+    JobCreate,
+    JobOut,
+    JobUpdate,
+    JobWeights,
+    SkillSuggestionRequest,
+    SkillSuggestionsOut,
+)
+from app.services import job_parsing, ranking, taxonomy as tx
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+def _apply_weights(job: Job, weights) -> None:
+    job.weight_skills = weights.skills
+    job.weight_experience = weights.experience
+    job.weight_education = weights.education
+    job.weight_semantic = weights.semantic
+    job.weight_location = weights.location
+    job.weight_projects = weights.projects
+    job.weight_certifications = weights.certifications
 
 
 def _to_out(db: Session, job: Job) -> JobOut:
@@ -66,6 +85,33 @@ def list_jobs(
     return [_to_out(db, job) for job in db.scalars(statement)]
 
 
+@router.post("/suggest-skills", response_model=SkillSuggestionsOut)
+def suggest_skills(
+    payload: SkillSuggestionRequest,
+    _: User = Depends(require_staff),
+) -> SkillSuggestionsOut:
+    """Skill suggestions for a role, drawn from the existing taxonomy —
+    never a separate hardcoded list. A POST (not GET) because the
+    description can be long enough to make a query string unreliable, and
+    the path is static so it never collides with GET /{job_id}'s int id."""
+    return SkillSuggestionsOut(skills=tx.suggest_skills(payload.title, payload.description))
+
+
+@router.post("/parse-jd", response_model=JDParseResult)
+def parse_jd(
+    payload: JDParseRequest,
+    _: User = Depends(require_staff),
+) -> JDParseResult:
+    """Best-effort structured draft from a pasted job description.
+
+    Nothing is persisted here — the recruiter reviews and edits this draft,
+    then creates the role the normal way (POST /jobs), same as if they had
+    typed every field by hand.
+    """
+    draft = job_parsing.parse_job_description(payload.text)
+    return JDParseResult(**draft.__dict__)
+
+
 @router.post("", response_model=JobOut, status_code=status.HTTP_201_CREATED)
 def create_job(
     payload: JobCreate,
@@ -78,12 +124,11 @@ def create_job(
         nice_to_have_skills=_normalise_skills(payload.nice_to_have_skills),
         created_by_id=user.id,
     )
-    weights = payload.weights
-    job.weight_skills = weights.skills
-    job.weight_experience = weights.experience
-    job.weight_education = weights.education
-    job.weight_semantic = weights.semantic
-    job.weight_location = weights.location
+    # Work mode is the more granular field; remote_ok (which scoring reads)
+    # is derived from it so there is one source of truth, not two.
+    if job.work_mode is not None:
+        job.remote_ok = job.work_mode == WorkMode.REMOTE
+    _apply_weights(job, payload.weights)
 
     db.add(job)
     db.commit()
@@ -130,12 +175,11 @@ def update_job(
     for key, value in data.items():
         setattr(job, key, value)
 
+    if "work_mode" in data:
+        job.remote_ok = data["work_mode"] == WorkMode.REMOTE
+
     if weights:
-        job.weight_skills = weights["skills"]
-        job.weight_experience = weights["experience"]
-        job.weight_education = weights["education"]
-        job.weight_semantic = weights["semantic"]
-        job.weight_location = weights["location"]
+        _apply_weights(job, payload.weights)
 
     db.add(job)
     db.commit()

@@ -52,7 +52,9 @@ import { KanbanBoard } from '@/components/app/KanbanBoard'
 import { CompareDialog } from '@/components/app/CompareDialog'
 import type { JobWeights, Match, PipelineStage, WeightPreviewRow } from '@/types'
 
-type SortKey = 'overall' | 'skills' | 'experience' | 'education' | 'semantic' | 'name'
+type SortKey =
+  | 'overall' | 'skills' | 'experience' | 'education' | 'semantic'
+  | 'projects' | 'certifications' | 'name'
 
 export function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>()
@@ -149,6 +151,10 @@ export function JobDetailPage() {
           return b.education_score - a.education_score
         case 'semantic':
           return b.semantic_score - a.semantic_score
+        case 'projects':
+          return b.projects_score - a.projects_score
+        case 'certifications':
+          return b.certifications_score - a.certifications_score
         default:
           return scoreOf(b) - scoreOf(a)
       }
@@ -534,13 +540,15 @@ function RankingTable({
     { key: 'experience', label: 'Exp' },
     { key: 'education', label: 'Edu' },
     { key: 'semantic', label: 'Rel' },
+    { key: 'projects', label: 'Proj' },
+    { key: 'certifications', label: 'Cert' },
   ]
 
   return (
     <Card className="overflow-hidden">
       {/* Wide content scrolls inside its own container; the page never does. */}
       <div className="scrollbar-thin overflow-x-auto">
-        <table className="w-full min-w-[860px] border-collapse text-sm">
+        <table className="w-full min-w-[1020px] border-collapse text-sm">
           <caption className="sr-only">
             Candidates ranked against this role, with per-dimension scores.
           </caption>
@@ -650,6 +658,8 @@ function RankingTable({
                   <MiniScore value={match.experience_score} dimension="experience" />
                   <MiniScore value={match.education_score} dimension="education" />
                   <MiniScore value={match.semantic_score} dimension="semantic" />
+                  <MiniScore value={match.projects_score} dimension="projects" />
+                  <MiniScore value={match.certifications_score} dimension="certifications" />
                   <td className="px-3 py-2">
                     <Badge variant="outline" className={cn('gap-1.5', stage.className)}>
                       <span className={cn('size-1.5 rounded-full', stage.dot)} aria-hidden="true" />

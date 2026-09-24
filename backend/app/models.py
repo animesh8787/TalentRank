@@ -67,6 +67,29 @@ class JobStatus(str, enum.Enum):
     CLOSED = "closed"
 
 
+class WorkMode(str, enum.Enum):
+    REMOTE = "remote"
+    HYBRID = "hybrid"
+    ONSITE = "onsite"
+
+
+class EmploymentType(str, enum.Enum):
+    FULL_TIME = "full_time"
+    PART_TIME = "part_time"
+    CONTRACT = "contract"
+    INTERNSHIP = "internship"
+    FREELANCE = "freelance"
+
+
+class Seniority(str, enum.Enum):
+    INTERNSHIP = "internship"
+    ENTRY = "entry"
+    JUNIOR = "junior"
+    MID = "mid"
+    SENIOR = "senior"
+    LEAD = "lead"
+
+
 # --------------------------------------------------------------------------- #
 # Auth
 # --------------------------------------------------------------------------- #
@@ -106,13 +129,25 @@ class Job(Base):
     salary_max: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), default=JobStatus.ACTIVE)
 
+    # Structured fields a recruiter can fill from dropdowns instead of free
+    # text, and that job-description parsing can prefill from a pasted JD.
+    industry: Mapped[str | None] = mapped_column(String(120))
+    employment_type: Mapped[EmploymentType | None] = mapped_column(Enum(EmploymentType))
+    work_mode: Mapped[WorkMode | None] = mapped_column(Enum(WorkMode))
+    seniority: Mapped[Seniority | None] = mapped_column(Enum(Seniority))
+    # required_experience (inherited above as the minimum) pairs with this
+    # for an explicit "3-5 years" style range; both optional beyond the min.
+    required_experience_max: Mapped[float | None] = mapped_column(Float)
+
     # Per-job scoring weights. Recruiters tune these live; they are normalised
     # to sum to 1.0 at scoring time so partial edits can never skew a ranking.
-    weight_skills: Mapped[float] = mapped_column(Float, default=0.35)
-    weight_experience: Mapped[float] = mapped_column(Float, default=0.25)
-    weight_education: Mapped[float] = mapped_column(Float, default=0.15)
+    weight_skills: Mapped[float] = mapped_column(Float, default=0.30)
+    weight_experience: Mapped[float] = mapped_column(Float, default=0.20)
+    weight_education: Mapped[float] = mapped_column(Float, default=0.10)
     weight_semantic: Mapped[float] = mapped_column(Float, default=0.15)
     weight_location: Mapped[float] = mapped_column(Float, default=0.10)
+    weight_projects: Mapped[float] = mapped_column(Float, default=0.10)
+    weight_certifications: Mapped[float] = mapped_column(Float, default=0.05)
 
     embedding: Mapped[list | None] = mapped_column(JSON)
     created_by_id: Mapped[int | None] = mapped_column(
@@ -133,6 +168,8 @@ class Job(Base):
             "education": self.weight_education,
             "semantic": self.weight_semantic,
             "location": self.weight_location,
+            "projects": self.weight_projects,
+            "certifications": self.weight_certifications,
         }
 
 
@@ -189,6 +226,12 @@ class Candidate(Base):
         back_populates="candidate", cascade="all, delete-orphan"
     )
     upload: Mapped["Upload | None"] = relationship(back_populates="candidate")
+    projects: Mapped[list["Project"]] = relationship(
+        back_populates="candidate", cascade="all, delete-orphan", lazy="selectin"
+    )
+    certifications: Mapped[list["Certification"]] = relationship(
+        back_populates="candidate", cascade="all, delete-orphan", lazy="selectin"
+    )
 
     @property
     def skill_names(self) -> list[str]:
@@ -235,6 +278,42 @@ class Education(Base):
     graduation_year: Mapped[str | None] = mapped_column(String(16))
 
     candidate: Mapped["Candidate"] = relationship(back_populates="educations")
+
+
+class Project(Base):
+    """A project a candidate lists on their profile.
+
+    Distinct from work_experience: a project is scoped work (often
+    unpaid/personal/academic) demonstrating specific skills, used by the
+    projects scoring dimension to check whether required skills are backed
+    by something built, not just claimed.
+    """
+
+    __tablename__ = "projects"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    candidate_id: Mapped[int] = mapped_column(ForeignKey("candidates.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text)
+    technologies: Mapped[list] = mapped_column(JSON, default=list)
+    url: Mapped[str | None] = mapped_column(String(512))
+    start_date: Mapped[str | None] = mapped_column(String(32))
+    end_date: Mapped[str | None] = mapped_column(String(32))
+
+    candidate: Mapped["Candidate"] = relationship(back_populates="projects")
+
+
+class Certification(Base):
+    __tablename__ = "certifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    candidate_id: Mapped[int] = mapped_column(ForeignKey("candidates.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(255))
+    issuer: Mapped[str | None] = mapped_column(String(255))
+    issue_date: Mapped[str | None] = mapped_column(String(32))
+    credential_url: Mapped[str | None] = mapped_column(String(512))
+
+    candidate: Mapped["Candidate"] = relationship(back_populates="certifications")
 
 
 # --------------------------------------------------------------------------- #
@@ -289,6 +368,8 @@ class Match(Base):
     education_score: Mapped[float] = mapped_column(Float, default=0.0)
     semantic_score: Mapped[float] = mapped_column(Float, default=0.0)
     location_score: Mapped[float] = mapped_column(Float, default=0.0)
+    projects_score: Mapped[float] = mapped_column(Float, default=0.0)
+    certifications_score: Mapped[float] = mapped_column(Float, default=0.0)
 
     # matched / semantic / missing skill lists plus resume evidence snippets
     explanation: Mapped[dict | None] = mapped_column(JSON)

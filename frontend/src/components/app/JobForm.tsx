@@ -1,10 +1,10 @@
 import * as React from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, X } from 'lucide-react'
+import { ClipboardPaste, Lightbulb, Plus, Sparkles, Wand2, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { cn, weightsTotalPercent } from '@/lib/utils'
 import {
   Badge,
   Button,
@@ -19,17 +19,10 @@ import {
   SelectValue,
   Switch,
   Textarea,
+  Tooltip,
 } from '@/components/ui/primitives'
-import { WeightSliders } from '@/components/app/WeightSliders'
-import type { Job, JobWeights } from '@/types'
-
-const DEFAULT_WEIGHTS: JobWeights = {
-  skills: 0.35,
-  experience: 0.25,
-  education: 0.15,
-  semantic: 0.15,
-  location: 0.1,
-}
+import { DEFAULT_WEIGHTS, WeightSliders } from '@/components/app/WeightSliders'
+import type { EmploymentType, Job, JobWeights, Seniority, WorkMode } from '@/types'
 
 const EDUCATION_OPTIONS = [
   'Any',
@@ -40,17 +33,56 @@ const EDUCATION_OPTIONS = [
   'PhD',
 ]
 
+const SENIORITY_OPTIONS: { value: Seniority; label: string }[] = [
+  { value: 'internship', label: 'Internship' },
+  { value: 'entry', label: 'Entry Level' },
+  { value: 'junior', label: 'Junior' },
+  { value: 'mid', label: 'Mid Level' },
+  { value: 'senior', label: 'Senior' },
+  { value: 'lead', label: 'Lead' },
+]
+
+const EMPLOYMENT_OPTIONS: { value: EmploymentType; label: string }[] = [
+  { value: 'full_time', label: 'Full-time' },
+  { value: 'part_time', label: 'Part-time' },
+  { value: 'contract', label: 'Contract' },
+  { value: 'internship', label: 'Internship' },
+  { value: 'freelance', label: 'Freelance' },
+]
+
+const WORK_MODE_OPTIONS: { value: WorkMode; label: string }[] = [
+  { value: 'remote', label: 'Remote' },
+  { value: 'hybrid', label: 'Hybrid' },
+  { value: 'onsite', label: 'On-site' },
+]
+
+const NONE = '__none__'
+
 export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }) {
   const queryClient = useQueryClient()
   const [errors, setErrors] = React.useState<Record<string, string>>({})
   const errorSummaryRef = React.useRef<HTMLDivElement>(null)
 
+  // "Paste JD" is only offered when creating a new role from scratch — an
+  // existing role's fields are already the source of truth.
+  const [mode, setMode] = React.useState<'manual' | 'paste'>(job ? 'manual' : 'manual')
+  const [jdText, setJdText] = React.useState('')
+  const [jdNotes, setJdNotes] = React.useState<string[]>([])
+  const [reviewing, setReviewing] = React.useState(false)
+
   const [title, setTitle] = React.useState(job?.title ?? '')
   const [department, setDepartment] = React.useState(job?.department ?? '')
+  const [industry, setIndustry] = React.useState(job?.industry ?? '')
+  const [employmentType, setEmploymentType] = React.useState<EmploymentType | typeof NONE>(job?.employment_type ?? NONE)
+  const [workMode, setWorkMode] = React.useState<WorkMode | typeof NONE>(job?.work_mode ?? NONE)
+  const [seniority, setSeniority] = React.useState<Seniority | typeof NONE>(job?.seniority ?? NONE)
   const [description, setDescription] = React.useState(job?.description ?? '')
   const [requiredSkills, setRequiredSkills] = React.useState<string[]>(job?.required_skills ?? [])
   const [niceSkills, setNiceSkills] = React.useState<string[]>(job?.nice_to_have_skills ?? [])
   const [experience, setExperience] = React.useState(String(job?.required_experience ?? 0))
+  const [experienceMax, setExperienceMax] = React.useState(
+    job?.required_experience_max != null ? String(job.required_experience_max) : '',
+  )
   const [education, setEducation] = React.useState(job?.required_education ?? 'Any')
   const [location, setLocation] = React.useState(job?.location ?? '')
   const [remoteOk, setRemoteOk] = React.useState(job?.remote_ok ?? false)
@@ -58,6 +90,37 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
   const [salaryMax, setSalaryMax] = React.useState(job?.salary_max ? String(job.salary_max) : '')
   const [status, setStatus] = React.useState(job?.status ?? 'active')
   const [weights, setWeights] = React.useState<JobWeights>(job?.weights ?? DEFAULT_WEIGHTS)
+
+  const parseJD = useMutation({
+    mutationFn: () => api.jobs.parseJD(jdText),
+    onSuccess: (draft) => {
+      if (draft.title) setTitle(draft.title)
+      if (draft.seniority) setSeniority(draft.seniority)
+      if (draft.employment_type) setEmploymentType(draft.employment_type)
+      if (draft.work_mode) {
+        setWorkMode(draft.work_mode)
+        if (draft.work_mode === 'remote') setRemoteOk(true)
+      }
+      if (draft.location) setLocation(draft.location)
+      if (draft.required_experience) setExperience(String(draft.required_experience))
+      if (draft.required_experience_max != null) setExperienceMax(String(draft.required_experience_max))
+      if (draft.required_education) setEducation(draft.required_education)
+      if (draft.required_skills.length) setRequiredSkills(draft.required_skills)
+      if (draft.nice_to_have_skills.length) setNiceSkills(draft.nice_to_have_skills)
+      setDescription(jdText)
+      setJdNotes(draft.notes)
+      setReviewing(true)
+      toast.success('Job description analysed', {
+        description: 'Review every field below before creating the role — nothing is saved yet.',
+      })
+    },
+    onError: (error: Error) => toast.error('Could not analyse this text', { description: error.message }),
+  })
+
+  const suggestSkills = useMutation({
+    mutationFn: () => api.jobs.suggestSkills(title, description),
+    onError: (error: Error) => toast.error('Could not suggest skills', { description: error.message }),
+  })
 
   const save = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
@@ -84,8 +147,13 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
     const years = Number(experience)
     if (Number.isNaN(years) || years < 0 || years > 50)
       next.required_experience = 'Enter a number between 0 and 50.'
+    if (experienceMax && Number(experienceMax) < years)
+      next.required_experience = 'The maximum cannot be below the minimum.'
     if (salaryMin && salaryMax && Number(salaryMin) > Number(salaryMax))
       next.salary = 'Minimum salary cannot exceed the maximum.'
+    const weightTotal = weightsTotalPercent(weights)
+    if (Math.abs(weightTotal - 100) > 0.5)
+      next.weights = `Scoring weights must total exactly 100% — currently ${weightTotal.toFixed(0)}%.`
     setErrors(next)
     if (Object.keys(next).length) {
       // Focus the summary so screen readers announce every problem at once.
@@ -102,10 +170,15 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
     save.mutate({
       title: title.trim(),
       department: department.trim() || null,
+      industry: industry.trim() || null,
+      employment_type: employmentType === NONE ? null : employmentType,
+      work_mode: workMode === NONE ? null : workMode,
+      seniority: seniority === NONE ? null : seniority,
       description: description.trim(),
       required_skills: requiredSkills,
       nice_to_have_skills: niceSkills,
       required_experience: Number(experience) || 0,
+      required_experience_max: experienceMax ? Number(experienceMax) : null,
       required_education: education === 'Any' ? null : education,
       location: location.trim() || null,
       remote_ok: remoteOk,
@@ -117,10 +190,86 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
   }
 
   const errorList = Object.entries(errors).filter(([key]) => key !== 'form')
+  const suggestions = (suggestSkills.data?.skills ?? []).filter(
+    (skill) => !requiredSkills.includes(skill) && !niceSkills.includes(skill),
+  )
+
+  // Paste-JD is a gate in front of the same form below, not a separate
+  // screen — the recruiter always lands on the ordinary fields to review
+  // and edit before anything is created.
+  if (!job && mode === 'paste' && !reviewing) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <DialogBody className="space-y-4">
+          <div className="flex items-start gap-2.5 rounded-md border border-primary/30 bg-primary/5 p-3">
+            <Wand2 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+            <p className="text-xs">
+              <span className="font-semibold">Paste a job description</span> and TalentRank will
+              draft the structured fields below — title, seniority, experience, skills, education,
+              location — for you to review and edit. Nothing is created until you confirm.
+            </p>
+          </div>
+          <Field label="Job description" htmlFor="jd-paste">
+            <Textarea
+              id="jd-paste"
+              value={jdText}
+              onChange={(event) => setJdText(event.target.value)}
+              rows={14}
+              placeholder="Paste the full job description here…"
+              autoFocus
+            />
+          </Field>
+        </DialogBody>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setMode('manual')}>
+            Fill in manually instead
+          </Button>
+          <Button
+            type="button"
+            onClick={() => parseJD.mutate()}
+            loading={parseJD.isPending}
+            disabled={!jdText.trim()}
+          >
+            <Sparkles aria-hidden="true" />
+            Analyse description
+          </Button>
+        </DialogFooter>
+      </div>
+    )
+  }
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
       <DialogBody className="space-y-5">
+        {!job && !reviewing && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setMode('paste')}
+            className="w-full justify-center"
+          >
+            <ClipboardPaste aria-hidden="true" />
+            Paste a job description instead
+          </Button>
+        )}
+
+        {reviewing && (
+          <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+              <Wand2 className="size-3.5" aria-hidden="true" />
+              Drafted from your job description — review every field before creating.
+            </p>
+            {jdNotes.length > 0 && (
+              <ul className="list-inside list-disc space-y-0.5 text-xs text-muted-foreground">
+                {jdNotes.map((note, index) => (
+                  <li key={index}>{note}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         {(errors.form || errorList.length > 0) && (
           <div
             ref={errorSummaryRef}
@@ -162,6 +311,70 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
           </Field>
         </div>
 
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Industry" htmlFor="job-industry">
+            <Input
+              value={industry}
+              onChange={(event) => setIndustry(event.target.value)}
+              placeholder="Fintech"
+            />
+          </Field>
+          <Field label="Seniority" htmlFor="job-seniority">
+            <Select value={seniority} onValueChange={(v) => setSeniority(v as Seniority)}>
+              <SelectTrigger id="job-seniority">
+                <SelectValue placeholder="Not specified" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>Not specified</SelectItem>
+                {SENIORITY_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Employment type" htmlFor="job-employment">
+            <Select value={employmentType} onValueChange={(v) => setEmploymentType(v as EmploymentType)}>
+              <SelectTrigger id="job-employment">
+                <SelectValue placeholder="Not specified" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>Not specified</SelectItem>
+                {EMPLOYMENT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Work mode" htmlFor="job-work-mode" hint="Remote sets remote-friendly automatically">
+            <Select
+              value={workMode}
+              onValueChange={(v) => {
+                setWorkMode(v as WorkMode)
+                setRemoteOk(v === 'remote')
+              }}
+            >
+              <SelectTrigger id="job-work-mode">
+                <SelectValue placeholder="Not specified" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>Not specified</SelectItem>
+                {WORK_MODE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+
         <Field
           label="Job description"
           htmlFor="job-description"
@@ -187,11 +400,69 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
 
         <SkillEditor
           id="job-nice"
-          label="Nice to have"
-          hint="Counted towards relevance, but never towards the required-skills score."
+          label="Preferred (nice to have)"
+          hint="Shown to candidates as extra credit — never required for the required-skills score."
           value={niceSkills}
           onChange={setNiceSkills}
         />
+
+        <div className="space-y-2 rounded-md border border-dashed border-border p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="flex items-center gap-1.5 text-xs font-semibold">
+              <Lightbulb className="size-3.5 text-primary" aria-hidden="true" />
+              Skill suggestions
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => suggestSkills.mutate()}
+              loading={suggestSkills.isPending}
+              disabled={!title.trim() && !description.trim()}
+            >
+              <Sparkles aria-hidden="true" />
+              Suggest from title &amp; description
+            </Button>
+          </div>
+          {suggestSkills.isSuccess && (
+            suggestions.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {suggestions.map((skill) => (
+                  <span
+                    key={skill}
+                    className="inline-flex items-center gap-1 rounded-md border border-border bg-card py-0.5 pl-2 pr-1 text-xs"
+                  >
+                    {skill}
+                    <Tooltip content="Add as required">
+                      <button
+                        type="button"
+                        onClick={() => setRequiredSkills((prev) => [...new Set([...prev, skill])])}
+                        className="cursor-pointer rounded p-0.5 text-muted-foreground hover:bg-primary/10 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={`Add ${skill} as required`}
+                      >
+                        <Plus className="size-3" aria-hidden="true" />
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="Add as preferred">
+                      <button
+                        type="button"
+                        onClick={() => setNiceSkills((prev) => [...new Set([...prev, skill])])}
+                        className="cursor-pointer rounded px-1 py-0.5 text-[10px] font-semibold text-muted-foreground hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={`Add ${skill} as preferred`}
+                      >
+                        P
+                      </button>
+                    </Tooltip>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Every suggestion is already on this role.
+              </p>
+            )
+          )}
+        </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
           <Field
@@ -210,6 +481,18 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
               onChange={(event) => setExperience(event.target.value)}
             />
           </Field>
+          <Field label="Maximum experience" htmlFor="job-required_experience_max" hint="Years, optional">
+            <Input
+              type="number"
+              min={0}
+              max={50}
+              step={0.5}
+              inputMode="decimal"
+              value={experienceMax}
+              onChange={(event) => setExperienceMax(event.target.value)}
+              placeholder="No maximum"
+            />
+          </Field>
           <Field label="Minimum education" htmlFor="job-education">
             <Select value={education} onValueChange={setEducation}>
               <SelectTrigger id="job-education">
@@ -224,6 +507,9 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
               </SelectContent>
             </Select>
           </Field>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Status" htmlFor="job-status">
             <Select value={status} onValueChange={(value) => setStatus(value as typeof status)}>
               <SelectTrigger id="job-status">
@@ -236,9 +522,6 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
               </SelectContent>
             </Select>
           </Field>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Location" htmlFor="job-location">
             <Input
               value={location}
@@ -247,14 +530,13 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
               disabled={remoteOk}
             />
           </Field>
-          <div className="flex items-end pb-2">
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <Switch checked={remoteOk} onCheckedChange={setRemoteOk} />
-              <span>Remote friendly</span>
-              <span className="text-xs text-muted-foreground">(everyone scores full marks on location)</span>
-            </label>
-          </div>
         </div>
+
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <Switch checked={remoteOk} onCheckedChange={setRemoteOk} />
+          <span>Remote friendly</span>
+          <span className="text-xs text-muted-foreground">(everyone scores full marks on location)</span>
+        </label>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Salary minimum" htmlFor="job-salary-min" error={errors.salary} hint="Annual, in rupees">
@@ -277,13 +559,12 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
           </Field>
         </div>
 
-        <div className="rounded-md border border-border p-4">
+        <div id="job-weights" className={cn('rounded-md border p-4', errors.weights ? 'border-destructive' : 'border-border')}>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Scoring weights
           </h3>
           <p className="mb-3 mt-1 text-xs text-muted-foreground">
-            How much each dimension counts for this role. A senior hire usually leans on experience;
-            a startup role leans on skills.
+            How much each dimension counts for this role's ranking. Must total exactly 100%.
           </p>
           <WeightSliders value={weights} onChange={setWeights} />
         </div>

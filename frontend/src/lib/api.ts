@@ -6,12 +6,14 @@ import type {
   CandidateDetail,
   FilterOptions,
   HealthStatus,
+  JDParseResult,
   Job,
   JobWeights,
   Match,
   MatchDetail,
   Note,
   PipelineStage,
+  RoleMatch,
   Upload,
   User,
   WeightPreviewRow,
@@ -172,6 +174,14 @@ export const api = {
       request<Job>(`/jobs/${id}`, { method: 'PATCH', body: payload }),
     remove: (id: number) => request<void>(`/jobs/${id}`, { method: 'DELETE' }),
     rescore: (id: number) => request<Job>(`/jobs/${id}/rescore`, { method: 'POST' }),
+    /** Best-effort structured draft from a pasted JD — nothing is saved. */
+    parseJD: (text: string) => request<JDParseResult>('/jobs/parse-jd', { method: 'POST', body: { text } }),
+    /** Taxonomy-driven skill suggestions for a role title/description. */
+    suggestSkills: (title: string, description = '') =>
+      request<{ skills: string[] }>('/jobs/suggest-skills', {
+        method: 'POST',
+        body: { title, description },
+      }),
   },
 
   candidates: {
@@ -190,6 +200,8 @@ export const api = {
     filters: () => request<FilterOptions>('/candidates/filters'),
     get: (id: number) => request<CandidateDetail>(`/candidates/${id}`),
     me: () => request<CandidateDetail>('/candidates/me'),
+    /** "Roles you match" — every active role, scored, with skill gap and recommendations. */
+    myMatches: () => request<RoleMatch[]>('/candidates/me/matches'),
     update: (id: number, payload: Record<string, unknown>) =>
       request<CandidateDetail>(`/candidates/${id}`, { method: 'PATCH', body: payload }),
     remove: (id: number) => request<void>(`/candidates/${id}`, { method: 'DELETE' }),

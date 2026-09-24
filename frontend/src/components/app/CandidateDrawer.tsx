@@ -410,7 +410,7 @@ function WhyThisScore({ explanation }: { explanation: NonNullable<MatchDetail['e
 
 function radarSummary(data: { dimension: string; score: number }[]) {
   const parts = data.map((d) => `${d.dimension} ${d.score}%`).join(', ')
-  return `Fit profile across five dimensions: ${parts}.`
+  return `Fit profile across ${data.length} dimensions: ${parts}.`
 }
 
 /* -------------------------------------------------------------------------- */

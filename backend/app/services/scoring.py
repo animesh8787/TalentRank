@@ -16,7 +16,17 @@ from app.services import embeddings, taxonomy as tx
 # A required skill counts as semantically matched above this cosine similarity.
 SEMANTIC_SKILL_THRESHOLD = 0.62
 
-DIMENSIONS = ("skills", "experience", "education", "semantic", "location")
+DIMENSIONS = (
+    "skills", "experience", "education", "semantic", "location",
+    "projects", "certifications",
+)
+
+# Defaults mirror Job's column defaults in models.py and JobWeights in
+# schemas.py — keep all three in sync when changing them.
+DEFAULT_WEIGHTS: dict[str, float] = {
+    "skills": 0.30, "experience": 0.20, "education": 0.10, "semantic": 0.15,
+    "location": 0.10, "projects": 0.10, "certifications": 0.05,
+}
 
 
 @dataclass
@@ -49,6 +59,12 @@ class ScoreResult:
     missing_skills: list[str] = field(default_factory=list)
     evidence: list[dict] = field(default_factory=list)
     summary: str = ""
+    # Nice-to-have skills are informational only — they never affect the
+    # score (score_skills already enforces that; only required_skills feeds
+    # the skills dimension), but a candidate or recruiter still benefits from
+    # knowing which of them are covered.
+    preferred_matched: list[dict] = field(default_factory=list)
+    preferred_missing: list[str] = field(default_factory=list)
 
     def explanation(self) -> dict:
         return {
@@ -57,6 +73,8 @@ class ScoreResult:
             "missing_skills": self.missing_skills,
             "evidence": self.evidence,
             "summary": self.summary,
+            "preferred_matched": self.preferred_matched,
+            "preferred_missing": self.preferred_missing,
         }
 
 
@@ -217,6 +235,57 @@ def score_location(
     return 0.0, f"{candidate_location} does not match {job_location}."
 
 
+def score_projects(
+    projects: list[dict], required_skills: list[str]
+) -> tuple[float, str]:
+    """Projects that demonstrate a required skill count more than bare presence.
+
+    Blends two signals: how many required skills are actually backed by a
+    project's listed technologies (60%), and how complete the projects
+    section is on its own terms — a couple of real entries maxes this part
+    out even for a role with no required skills (40%).
+    """
+    if not projects:
+        return 0.0, "No projects listed on the profile."
+
+    required = list(dict.fromkeys(tx.canonical_skill(s) for s in required_skills if s and s.strip()))
+    covered: set[str] = set()
+    for project in projects:
+        techs = {tx.canonical_skill(t) for t in (project.get("technologies") or []) if t}
+        covered |= techs & set(required)
+
+    completeness = min(1.0, len(projects) / 3)
+    if required:
+        coverage = len(covered) / len(required)
+        score = 0.6 * coverage + 0.4 * completeness
+        if covered:
+            detail = (
+                f"{len(covered)} of {len(required)} required skill(s) demonstrated "
+                f"across {len(projects)} project(s)."
+            )
+        else:
+            detail = f"{len(projects)} project(s) listed, but none demonstrate a required skill."
+    else:
+        score = completeness
+        detail = f"{len(projects)} project(s) listed."
+
+    return round(max(0.0, min(1.0, score)), 4), detail
+
+
+def score_certifications(certifications: list[dict]) -> tuple[float, str]:
+    """Presence-based: certifications are a bonus signal, not a gate.
+
+    Full credit at 2+ certifications — a role rarely needs more than that to
+    treat the candidate as fully credentialed, and requiring more would
+    reward collecting certificates over the skills they attest to.
+    """
+    if not certifications:
+        return 0.0, "No certifications listed on the profile."
+    score = min(1.0, len(certifications) / 2)
+    plural = "" if len(certifications) == 1 else "s"
+    return round(score, 4), f"{len(certifications)} certification{plural} on file."
+
+
 # --------------------------------------------------------------------------- #
 # Combined
 # --------------------------------------------------------------------------- #
@@ -225,8 +294,7 @@ def normalise_weights(weights: dict[str, float]) -> dict[str, float]:
     cleaned = {k: max(0.0, float(weights.get(k, 0.0) or 0.0)) for k in DIMENSIONS}
     total = sum(cleaned.values())
     if total <= 0:
-        return {"skills": 0.35, "experience": 0.25, "education": 0.15,
-                "semantic": 0.15, "location": 0.10}
+        return dict(DEFAULT_WEIGHTS)
     return {k: v / total for k, v in cleaned.items()}
 
 
@@ -254,6 +322,9 @@ def score_candidate(
     remote_ok: bool,
     weights: dict[str, float],
     semantic_similarity: float,
+    nice_to_have_skills: list[str] = (),
+    candidate_projects: list[dict] = (),
+    candidate_certifications: list[dict] = (),
 ) -> ScoreResult:
     """Compute the full explainable score for one candidate against one job."""
     weights = normalise_weights(weights)
@@ -271,6 +342,14 @@ def score_candidate(
         candidate_location, job_location, remote_ok
     )
     semantic_score = max(0.0, min(1.0, float(semantic_similarity or 0.0)))
+    projects_score, projects_detail = score_projects(list(candidate_projects), required_skills)
+    certifications_score, certifications_detail = score_certifications(list(candidate_certifications))
+
+    # Preferred (nice-to-have) skills reuse the exact same matcher as
+    # required skills — score_skills is generic over "the list to match
+    # against" — but their result never feeds the score, only the
+    # explanation, so a role with no preferred skills listed is unaffected.
+    _, preferred_matches_raw, _ = score_skills(candidate_skills, list(nice_to_have_skills), resume_text)
 
     raw = {
         "skills": (skills_score, "Skills", skills_detail),
@@ -282,6 +361,8 @@ def score_candidate(
             f"{semantic_score:.0%} overall textual similarity to the job description.",
         ),
         "location": (location_score, "Location", location_detail),
+        "projects": (projects_score, "Projects", projects_detail),
+        "certifications": (certifications_score, "Certifications", certifications_detail),
     }
 
     dimensions: dict[str, DimensionScore] = {}
@@ -312,6 +393,19 @@ def score_candidate(
     ]
     missing = [m.required for m in skill_matches if m.kind == "missing"]
 
+    preferred_matched = [
+        {
+            "required": m.required,
+            "matched_with": m.matched_with,
+            "kind": m.kind,
+            "similarity": m.similarity,
+            "evidence": m.evidence,
+        }
+        for m in preferred_matches_raw
+        if m.kind != "missing"
+    ]
+    preferred_missing = [m.required for m in preferred_matches_raw if m.kind == "missing"]
+
     evidence = [
         {"skill": m["required"], "snippet": m["evidence"]}
         for m in matched
@@ -334,4 +428,6 @@ def score_candidate(
         missing_skills=missing,
         evidence=evidence,
         summary=summary,
+        preferred_matched=preferred_matched,
+        preferred_missing=preferred_missing,
     )

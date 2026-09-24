@@ -7,9 +7,16 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import anonymized_requested, get_current_user, record_audit, require_staff
 from app.core.database import get_db
-from app.models import Candidate, Skill, User, UserRole
-from app.schemas import CandidateDetail, CandidateOut, CandidateUpdate
-from app.services import anonymize, ranking, taxonomy as tx
+from app.models import Candidate, Certification, Education, Job, JobStatus, Match, Project, Skill, User, UserRole, WorkExperience
+from app.schemas import (
+    CandidateDetail,
+    CandidateOut,
+    CandidateUpdate,
+    RecommendationOut,
+    RoleMatchOut,
+    SkillGapItem,
+)
+from app.services import anonymize, ranking, recommendations, taxonomy as tx
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
@@ -122,6 +129,80 @@ def my_profile(
     return CandidateDetail.model_validate(candidate)
 
 
+def _skill_gap_status(kind: str, similarity: float) -> str:
+    if kind == "missing":
+        return "missing"
+    if kind in ("exact", "alias"):
+        return "strong"
+    return "strong" if similarity >= 0.85 else "developing"  # semantic
+
+
+def _build_skill_gap(explanation: dict) -> list[SkillGapItem]:
+    """Required + preferred matches/misses from a Match.explanation, unified
+    into one gap list a candidate can act on."""
+    items: list[SkillGapItem] = []
+    for m in explanation.get("matched_skills") or []:
+        items.append(SkillGapItem(
+            skill=m["required"], required=True,
+            status=_skill_gap_status(m.get("kind", "missing"), m.get("similarity") or 0.0),
+            similarity=m.get("similarity") or 0.0, evidence=m.get("evidence"),
+        ))
+    for name in explanation.get("missing_skills") or []:
+        items.append(SkillGapItem(skill=name, required=True, status="missing", similarity=0.0))
+    for m in explanation.get("preferred_matched") or []:
+        items.append(SkillGapItem(
+            skill=m["required"], required=False,
+            status=_skill_gap_status(m.get("kind", "missing"), m.get("similarity") or 0.0),
+            similarity=m.get("similarity") or 0.0, evidence=m.get("evidence"),
+        ))
+    for name in explanation.get("preferred_missing") or []:
+        items.append(SkillGapItem(skill=name, required=False, status="missing", similarity=0.0))
+    return items
+
+
+@router.get("/me/matches", response_model=list[RoleMatchOut])
+def my_matches(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[RoleMatchOut]:
+    """"Roles you match" — every active role this candidate has been scored
+    against, using the exact same Match rows and scorer output recruiters
+    see, reshaped for the candidate: score, why, the skill gap for that
+    role, and concrete next steps. No separate matching system.
+    """
+    candidate = db.scalar(select(Candidate).where(Candidate.user_id == user.id))
+    if candidate is None or not ranking.has_resume(candidate):
+        raise HTTPException(
+            status_code=404,
+            detail="No resume on file yet. Upload one to see which roles you match.",
+        )
+
+    rows = db.execute(
+        select(Match, Job)
+        .join(Job, Match.job_id == Job.id)
+        .where(Match.candidate_id == candidate.id, Job.status == JobStatus.ACTIVE)
+        .order_by(Match.overall_score.desc())
+    ).all()
+
+    results: list[RoleMatchOut] = []
+    for match, job in rows:
+        explanation = match.explanation or {}
+        recs = recommendations.build_recommendations(candidate, job, explanation)
+        results.append(RoleMatchOut(
+            job=job,
+            overall_score=match.overall_score,
+            dimensions=explanation.get("dimensions", {}),
+            summary=explanation.get("summary", ""),
+            matched_skills=explanation.get("matched_skills", []),
+            missing_skills=explanation.get("missing_skills", []),
+            preferred_matched=explanation.get("preferred_matched", []),
+            preferred_missing=explanation.get("preferred_missing", []),
+            skill_gap=_build_skill_gap(explanation),
+            recommendations=[RecommendationOut(**r) for r in recs],
+        ))
+    return results
+
+
 @router.get("/{candidate_id}", response_model=CandidateDetail)
 def get_candidate(
     candidate_id: int,
@@ -151,6 +232,10 @@ def update_candidate(
 
     data = payload.model_dump(exclude_unset=True)
     skills = data.pop("skills", None)
+    experiences = data.pop("experiences", None)
+    educations = data.pop("educations", None)
+    projects = data.pop("projects", None)
+    certifications = data.pop("certifications", None)
     for key, value in data.items():
         setattr(candidate, key, value)
 
@@ -174,6 +259,39 @@ def update_candidate(
             )
             for name in names
         ]
+
+    # Same clear-then-flush-then-replace pattern as skills above, applied
+    # consistently to every candidate-editable list so none of them can hit
+    # the same insert-before-delete ordering issue.
+    if experiences is not None:
+        candidate.experiences.clear()
+        db.flush()
+        candidate.experiences = [WorkExperience(**item) for item in experiences]
+
+    if educations is not None:
+        candidate.educations.clear()
+        db.flush()
+        candidate.educations = [Education(**item) for item in educations]
+        # Keep the scalar "highest qualification" summary in sync unless the
+        # request already set it explicitly in this same call.
+        if "highest_qualification" not in data:
+            best_rank, best_label = 0, None
+            for item in educations:
+                rank = tx.education_rank(item.get("degree"))
+                if rank > best_rank:
+                    best_rank, best_label = rank, item.get("degree")
+            if best_label:
+                candidate.highest_qualification = best_label
+
+    if projects is not None:
+        candidate.projects.clear()
+        db.flush()
+        candidate.projects = [Project(**item) for item in projects]
+
+    if certifications is not None:
+        candidate.certifications.clear()
+        db.flush()
+        candidate.certifications = [Certification(**item) for item in certifications]
 
     db.add(candidate)
     db.commit()

@@ -32,11 +32,13 @@ const API_DOCS_URL = 'https://talentrank-api.onrender.com/docs'
 /* even if the backend is asleep (Render free tier spins down when idle).     */
 /* -------------------------------------------------------------------------- */
 const EXAMPLE_DIMENSIONS: Record<DimensionKey, DimensionScore> = {
-  skills: { key: 'skills', label: 'Skills', score: 0.91, weight: 0.35, contribution: 0.32, detail: 'Matched 8 of 9 required skills.' },
-  experience: { key: 'experience', label: 'Experience', score: 1, weight: 0.25, contribution: 0.25, detail: '6 yrs meets the 5 yr minimum.' },
-  education: { key: 'education', label: 'Education', score: 1, weight: 0.15, contribution: 0.15, detail: 'Masters meets the Masters requirement.' },
+  skills: { key: 'skills', label: 'Skills', score: 0.91, weight: 0.3, contribution: 0.27, detail: 'Matched 8 of 9 required skills.' },
+  experience: { key: 'experience', label: 'Experience', score: 1, weight: 0.2, contribution: 0.2, detail: '6 yrs meets the 5 yr minimum.' },
+  education: { key: 'education', label: 'Education', score: 1, weight: 0.1, contribution: 0.1, detail: 'Masters meets the Masters requirement.' },
   semantic: { key: 'semantic', label: 'Relevance', score: 0.78, weight: 0.15, contribution: 0.12, detail: '78% overall textual similarity to the job description.' },
   location: { key: 'location', label: 'Location', score: 1, weight: 0.1, contribution: 0.1, detail: 'Based in Bangalore.' },
+  projects: { key: 'projects', label: 'Projects', score: 0.85, weight: 0.1, contribution: 0.09, detail: '3 of 3 required skills demonstrated across 2 projects.' },
+  certifications: { key: 'certifications', label: 'Certifications', score: 1, weight: 0.05, contribution: 0.05, detail: '2 certifications on file.' },
 }
 
 const EXAMPLE_RANKING = [
@@ -50,7 +52,7 @@ const FEATURES = [
     icon: BarChart3,
     title: 'Explainable scoring',
     description:
-      'Five dimensions — skills, experience, education, relevance, location — each with a reason, not just a number.',
+      'Seven dimensions — skills, experience, education, relevance, location, projects, certifications — each with a reason, not just a number.',
   },
   {
     icon: Sparkles,

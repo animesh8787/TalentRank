@@ -230,6 +230,88 @@ DEMOGRAPHIC_TERMS = [
 ]
 
 
+# Role-title keywords -> relevant taxonomy categories, used to suggest
+# skills for a role without hardcoding the skills themselves — the actual
+# suggestions always come from SKILL_CATEGORIES above.
+ROLE_CATEGORY_HINTS: dict[str, list[str]] = {
+    "backend": ["programming", "web", "databases", "devops", "cloud"],
+    "front end": ["web", "practices"],
+    "frontend": ["web", "practices"],
+    "full stack": ["web", "programming", "databases"],
+    "fullstack": ["web", "programming", "databases"],
+    "data scientist": ["data_science", "programming", "databases"],
+    "data science": ["data_science", "programming", "databases"],
+    "data engineer": ["data_science", "databases", "cloud", "devops"],
+    "data analyst": ["data_science", "databases"],
+    "machine learning": ["data_science", "programming"],
+    "ml engineer": ["data_science", "programming", "cloud"],
+    "ai engineer": ["data_science", "programming", "cloud"],
+    "devops": ["devops", "cloud"],
+    "site reliability": ["devops", "cloud"],
+    "sre": ["devops", "cloud"],
+    "platform engineer": ["cloud", "devops"],
+    "cloud engineer": ["cloud", "devops"],
+    "mobile": ["mobile", "programming"],
+    "android": ["mobile", "programming"],
+    "ios developer": ["mobile", "programming"],
+    "qa": ["practices", "programming"],
+    "test engineer": ["practices", "programming"],
+    "sdet": ["practices", "programming"],
+    "security engineer": ["devops", "programming"],
+    "database administrator": ["databases", "cloud"],
+    "product manager": ["practices"],
+    "project manager": ["practices"],
+    "software engineer": ["programming", "web", "databases"],
+    "web developer": ["web", "programming"],
+}
+
+
+def suggest_skills(title: str, description: str = "", limit: int = 15) -> list[str]:
+    """Suggest taxonomy skills relevant to a role, from its title/description.
+
+    Matches role-hint keywords against the free text to pick relevant skill
+    categories, then falls back to scanning the text for any taxonomy skill
+    it actually mentions, so a title that matches no hint (or an unusual one)
+    still yields suggestions when the description spells out its stack.
+    Never returns anything outside SKILL_CATEGORIES — there is no separate
+    hardcoded skill list here.
+    """
+    haystack = f"{title} {description}".lower()
+
+    categories: list[str] = []
+    for keyword, cats in ROLE_CATEGORY_HINTS.items():
+        if keyword in haystack:
+            for category in cats:
+                if category not in categories:
+                    categories.append(category)
+
+    # Round-robin across matched categories so a role that hints at several
+    # of them (e.g. "backend" -> programming, web, databases, devops, cloud)
+    # gets a spread of suggestions instead of exhausting the first category.
+    suggestions: list[str] = []
+    pools = [list(SKILL_CATEGORIES.get(category, [])) for category in categories]
+    while len(suggestions) < limit and any(pools):
+        for pool in pools:
+            if not pool:
+                continue
+            skill = pool.pop(0)
+            if skill not in suggestions:
+                suggestions.append(skill)
+            if len(suggestions) >= limit:
+                break
+
+    if len(suggestions) < limit:
+        for skill in ALL_SKILLS:
+            if len(suggestions) >= limit:
+                break
+            if skill in suggestions:
+                continue
+            if re.search(rf"(?<![\w+#.]){re.escape(skill)}(?![\w+#])", haystack):
+                suggestions.append(skill)
+
+    return suggestions[:limit]
+
+
 def canonical_skill(raw: str) -> str:
     """Normalise a user-typed skill to its canonical taxonomy form."""
     cleaned = raw.strip().lower().rstrip(".,;:")

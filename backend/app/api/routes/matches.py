@@ -257,7 +257,8 @@ def export_csv(
     writer.writerow([
         "Rank", "Name", "Email", "Phone", "Location", "Experience (yrs)",
         "Education", "Overall %", "Skills %", "Experience %", "Education %",
-        "Relevance %", "Location %", "Stage", "Matched skills", "Missing skills",
+        "Relevance %", "Location %", "Projects %", "Certifications %",
+        "Stage", "Matched skills", "Missing skills",
     ])
 
     for rank, match in enumerate(matches, start=1):
@@ -281,6 +282,8 @@ def export_csv(
             f"{match.education_score * 100:.1f}",
             f"{match.semantic_score * 100:.1f}",
             f"{match.location_score * 100:.1f}",
+            f"{match.projects_score * 100:.1f}",
+            f"{match.certifications_score * 100:.1f}",
             match.stage.value,
             "; ".join(m.get("required", "") for m in explanation.get("matched_skills", [])),
             "; ".join(explanation.get("missing_skills", [])),
