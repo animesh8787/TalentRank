@@ -113,7 +113,8 @@ def my_profile(
 ) -> CandidateDetail:
     """The candidate self-service view of their own parsed data."""
     candidate = db.scalar(select(Candidate).where(Candidate.user_id == user.id))
-    if candidate is None:
+    # The profile made at registration is empty until a resume is processed.
+    if candidate is None or not ranking.has_resume(candidate):
         raise HTTPException(
             status_code=404,
             detail="No resume on file yet. Upload one to see how it was read.",

@@ -12,7 +12,7 @@ import hashlib
 import logging
 import queue
 import threading
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -27,6 +27,8 @@ from app.models import (
     ProcessingStatus,
     Skill,
     Upload,
+    User,
+    UserRole,
     WorkExperience,
 )
 from app.services import embeddings, health_check, parsing
@@ -38,25 +40,31 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------- #
 # Event bus — fan-out of upload progress to any number of SSE listeners
 # --------------------------------------------------------------------------- #
+EventFilter = Callable[[dict], bool]
+
+
 class EventBus:
     def __init__(self) -> None:
-        self._subscribers: set[queue.Queue] = set()
+        self._subscribers: dict[queue.Queue, EventFilter | None] = {}
         self._lock = threading.Lock()
 
-    def subscribe(self) -> queue.Queue:
+    def subscribe(self, visible: EventFilter | None = None) -> queue.Queue:
+        """Register a listener. `visible` decides which events it may receive."""
         q: queue.Queue = queue.Queue(maxsize=256)
         with self._lock:
-            self._subscribers.add(q)
+            self._subscribers[q] = visible
         return q
 
     def unsubscribe(self, q: queue.Queue) -> None:
         with self._lock:
-            self._subscribers.discard(q)
+            self._subscribers.pop(q, None)
 
     def publish(self, event: dict) -> None:
         with self._lock:
-            targets = list(self._subscribers)
-        for q in targets:
+            targets = list(self._subscribers.items())
+        for q, visible in targets:
+            if visible is not None and not visible(event):
+                continue
             try:
                 q.put_nowait(event)
             except queue.Full:
@@ -71,6 +79,7 @@ def _emit(upload: Upload, message: str | None = None) -> None:
     bus.publish({
         "type": "upload.progress",
         "upload_id": upload.id,
+        "_owner_id": upload.uploaded_by_id,
         "filename": upload.original_filename,
         "status": upload.status.value,
         "progress": upload.progress,
@@ -163,6 +172,33 @@ def _apply_parsed(candidate: Candidate, parsed: parsing.ParsedResume) -> None:
     ]
 
 
+def _target_candidate(db: Session, upload: Upload, digest: str) -> tuple[Candidate, bool]:
+    """Pick the candidate record an upload should populate.
+
+    A candidate uploading their own resume fills in the profile created for
+    them at registration — otherwise the parsed data lands on an unlinked
+    record and /candidates/me never shows it. Staff uploads keep the
+    content-hash de-duplication. Returns (candidate, is_duplicate).
+    """
+    same_content = db.scalar(select(Candidate).where(Candidate.content_hash == digest))
+
+    uploader = db.get(User, upload.uploaded_by_id) if upload.uploaded_by_id else None
+    if uploader is None or uploader.role is not UserRole.CANDIDATE:
+        return (same_content or Candidate()), same_content is not None
+
+    own = db.scalar(select(Candidate).where(Candidate.user_id == uploader.id))
+    if own is not None:
+        # Re-uploading the same file just refreshes the profile.
+        return own, own.content_hash == digest
+
+    # No profile row yet: claim a matching unlinked record so recruiter notes
+    # and pipeline stages carry over, or start a fresh one.
+    if same_content is not None and same_content.user_id is None:
+        same_content.user_id = uploader.id
+        return same_content, True
+    return Candidate(user_id=uploader.id, email=uploader.email), False
+
+
 def process_upload(upload_id: int) -> None:
     """Run one upload end to end. Safe to call on a worker thread."""
     db = SessionLocal()
@@ -190,18 +226,22 @@ def process_upload(upload_id: int) -> None:
 
         # 2. Duplicate check -------------------------------------------------
         digest = content_hash(document.text)
-        existing = db.scalar(select(Candidate).where(Candidate.content_hash == digest))
+        candidate, is_duplicate = _target_candidate(db, upload, digest)
 
         # 3. Parse -----------------------------------------------------------
         _set_state(db, upload, ProcessingStatus.PARSING, 45, "Extracting details")
         parsed = parsing.parse_resume(document.text)
 
-        candidate = existing or Candidate()
-        if existing:
-            upload.is_duplicate = True
-            _clear_children(db, candidate)
+        upload.is_duplicate = is_duplicate
+        _clear_children(db, candidate)
 
+        previous_name, previous_email = candidate.full_name, candidate.email
         _apply_parsed(candidate, parsed)
+        # Keep what registration recorded when the parser can't find a value.
+        candidate.full_name = candidate.full_name or previous_name
+        candidate.email = candidate.email or previous_email
+        # Fresh parse replaces any earlier corrections, so it needs re-review.
+        candidate.verified_by_candidate = False
         candidate.resume_text = document.text
         candidate.content_hash = digest
         candidate.source_filename = upload.original_filename
@@ -238,6 +278,7 @@ def process_upload(upload_id: int) -> None:
         bus.publish({
             "type": "upload.completed",
             "upload_id": upload.id,
+            "_owner_id": upload.uploaded_by_id,
             "filename": upload.original_filename,
             "status": upload.status.value,
             "progress": 100,
@@ -304,11 +345,18 @@ def enqueue(upload_ids: Iterable[int]) -> None:
         _work_queue.put(upload_id)
 
 
-async def event_stream():
+def visible_to(user_id: int, role: UserRole) -> EventFilter:
+    """Staff see every upload; candidates see only their own."""
+    if role is UserRole.CANDIDATE:
+        return lambda event: event.get("_owner_id") == user_id
+    return lambda event: True
+
+
+async def event_stream(visible: EventFilter):
     """Async generator of SSE-formatted strings for FastAPI's StreamingResponse."""
     import json
 
-    subscriber = bus.subscribe()
+    subscriber = bus.subscribe(visible)
     loop = asyncio.get_running_loop()
     try:
         yield ": connected\n\n"
@@ -321,7 +369,9 @@ async def event_stream():
             except queue.Empty:
                 yield ": keep-alive\n\n"  # keeps proxies from closing the stream
                 continue
-            yield f"data: {json.dumps(event)}\n\n"
+            # Routing metadata stays server-side.
+            public = {k: v for k, v in event.items() if not k.startswith("_")}
+            yield f"data: {json.dumps(public)}\n\n"
     except asyncio.CancelledError:
         raise
     finally:

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models import Candidate, Job, JobStatus, Match
@@ -89,11 +89,25 @@ def _upsert_match(db: Session, job: Job, candidate: Candidate, result: scoring.S
     return match
 
 
+def has_resume(candidate: Candidate) -> bool:
+    """Profiles created at registration stay empty until a resume is uploaded."""
+    return bool((candidate.resume_text or "").strip())
+
+
 def rescore_job(db: Session, job: Job) -> int:
     """Re-score every candidate against one job. Returns the number scored."""
     ensure_job_embedding(db, job)
-    candidates = list(db.scalars(select(Candidate)))
+    everyone = list(db.scalars(select(Candidate)))
+    candidates = [c for c in everyone if has_resume(c)]
+
+    # An empty profile has nothing to rank, so drop any match it was given.
+    empty_ids = [c.id for c in everyone if not has_resume(c)]
+    if empty_ids:
+        db.execute(
+            delete(Match).where(Match.job_id == job.id, Match.candidate_id.in_(empty_ids))
+        )
     if not candidates:
+        db.commit()
         return 0
 
     semantic = _semantic_scores(job, candidates)
@@ -107,6 +121,8 @@ def rescore_job(db: Session, job: Job) -> int:
 
 def rescore_candidate_everywhere(db: Session, candidate: Candidate) -> int:
     """Score one candidate against every open job — used after ingestion."""
+    if not has_resume(candidate):
+        return 0
     jobs = list(db.scalars(select(Job).where(Job.status != JobStatus.CLOSED)))
     for job in jobs:
         ensure_job_embedding(db, job)

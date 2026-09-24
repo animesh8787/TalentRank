@@ -11,9 +11,9 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, record_audit
+from app.api.deps import FirebaseClaims, get_current_user, get_firebase_claims, record_audit
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db
 from app.models import ProcessingStatus, Upload, User, UserRole
 from app.schemas import UploadOut
 from app.services import pipeline
@@ -134,15 +134,26 @@ def list_uploads(
 
 
 @router.get("/stream")
-async def stream_progress() -> StreamingResponse:
+async def stream_progress(
+    claims: FirebaseClaims = Depends(get_firebase_claims),
+) -> StreamingResponse:
     """Server-sent events carrying per-file ingestion progress.
 
-    EventSource cannot send an Authorization header, so this endpoint is not
-    behind the bearer guard. It emits only filenames and processing state —
-    no resume content, no personal data.
+    Events carry filenames and parsed candidate names, so the stream is
+    authenticated and filtered per user: candidates only hear about their own
+    uploads. The frontend reads it with fetch() because EventSource cannot
+    send an Authorization header.
     """
+    # Look the user up with a short-lived session rather than get_db, which
+    # would hold a pooled connection open for the life of the stream.
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.firebase_uid == claims.uid))
+        if user is None or not user.is_active:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        visible = pipeline.visible_to(user.id, user.role)
+
     return StreamingResponse(
-        pipeline.event_stream(),
+        pipeline.event_stream(visible),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

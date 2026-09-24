@@ -205,6 +205,20 @@ export const api = {
     },
     retry: (id: number) => request<Upload>(`/uploads/${id}/retry`, { method: 'POST' }),
     fileUrl: (id: number) => `${API_BASE}/api/uploads/${id}/file`,
+    /**
+     * Open the live progress stream. Uses fetch rather than EventSource so the
+     * bearer token can be sent — the server filters events per user.
+     */
+    stream: async (signal: AbortSignal) => {
+      const token = await getAuthToken()
+      const headers = new Headers({ Accept: 'text/event-stream' })
+      if (token) headers.set('Authorization', `Bearer ${token}`)
+      const response = await fetch(`${API_BASE}/api/uploads/stream`, { headers, signal })
+      if (!response.ok || !response.body) {
+        throw new ApiError('Could not open the progress stream', response.status)
+      }
+      return response.body
+    },
   },
 
   matches: {
