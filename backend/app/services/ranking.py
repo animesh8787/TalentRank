@@ -39,19 +39,32 @@ def ensure_job_embedding(db: Session, job: Job) -> None:
         db.commit()
 
 
-def _semantic_scores(job: Job, candidates: list[Candidate]) -> dict[int, float]:
-    """Cosine similarity per candidate, or a corpus-wide TF-IDF fallback."""
+def _semantic_scores(
+    job: Job, candidates: list[Candidate], corpus: list[Candidate] | None = None
+) -> dict[int, float]:
+    """Cosine similarity per candidate, or a corpus-wide TF-IDF fallback.
+
+    `corpus` is the full set of resumes the TF-IDF vector space is fitted
+    over; it defaults to `candidates` but callers scoring a subset (e.g. one
+    newly ingested candidate) must pass the whole corpus explicitly. Fitting
+    over just the subset being persisted is what made scores incomparable
+    depending on whether a candidate was scored at ingestion time (a
+    two-document fit against just the job) or at a full job rescore (fitted
+    over everyone) — see embeddings.py's module docstring.
+    """
     if job.embedding and all(c.embedding for c in candidates):
         return {
             c.id: embeddings.cosine(job.embedding, c.embedding) for c in candidates
         }
 
-    # Fallback fits one vectoriser over the whole corpus so scores stay
-    # comparable between candidates.
-    documents = [(c.resume_text or "")[:8000] for c in candidates]
+    corpus = candidates if corpus is None else corpus
+    documents = [(c.resume_text or "")[:8000] for c in corpus]
     similarities = embeddings.tfidf_similarities(job_profile_text(job), documents)
-    return {c.id: similarities[i] if i < len(similarities) else 0.0
-            for i, c in enumerate(candidates)}
+    index = {c.id: i for i, c in enumerate(corpus)}
+    return {
+        c.id: similarities[index[c.id]] if c.id in index and index[c.id] < len(similarities) else 0.0
+        for c in candidates
+    }
 
 
 def score_pair(job: Job, candidate: Candidate, semantic: float) -> scoring.ScoreResult:
@@ -110,7 +123,7 @@ def rescore_job(db: Session, job: Job) -> int:
         db.commit()
         return 0
 
-    semantic = _semantic_scores(job, candidates)
+    semantic = _semantic_scores(job, candidates, corpus=candidates)
     for candidate in candidates:
         result = score_pair(job, candidate, semantic.get(candidate.id, 0.0))
         _upsert_match(db, job, candidate, result)
@@ -120,16 +133,26 @@ def rescore_job(db: Session, job: Job) -> int:
 
 
 def rescore_candidate_everywhere(db: Session, candidate: Candidate) -> int:
-    """Score one candidate against every open job — used after ingestion."""
+    """Score one candidate against every open job — used after ingestion.
+
+    Without an embedding model (the free-tier default), the TF-IDF fallback's
+    vector space is fit fresh from whichever candidates are passed in. Scoring
+    only the new candidate here would fit it alone against the job — a
+    two-document fit — while a later full rescore fits over everyone,
+    landing on a different score for the same resume. Doing a full
+    `rescore_job` instead keeps every match for a job fit over the same
+    corpus, so a score never depends on whether it was computed right after
+    upload or by a later rescore.
+
+    When embeddings are enabled this is more work than scoring just the one
+    candidate, but cosine similarity against a job's cached embedding is
+    cheap and doesn't drift, so the correctness cost is TF-IDF-only.
+    """
     if not has_resume(candidate):
         return 0
     jobs = list(db.scalars(select(Job).where(Job.status != JobStatus.CLOSED)))
     for job in jobs:
-        ensure_job_embedding(db, job)
-        semantic = _semantic_scores(job, [candidate]).get(candidate.id, 0.0)
-        result = score_pair(job, candidate, semantic)
-        _upsert_match(db, job, candidate, result)
-    db.commit()
+        rescore_job(db, job)
     return len(jobs)
 
 
