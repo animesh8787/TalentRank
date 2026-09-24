@@ -156,6 +156,14 @@ def update_candidate(
 
     if skills is not None:
         names = list(dict.fromkeys(tx.canonical_skill(s) for s in skills if s.strip()))
+        # Clear and flush before inserting the replacements — assigning a
+        # fresh list straight onto the relationship lets SQLAlchemy emit the
+        # INSERTs before the orphan DELETEs within one flush, which trips the
+        # (candidate_id, name) unique constraint whenever a name is kept
+        # (see pipeline._clear_children, which handles the same pattern for
+        # skills parsed from an upload).
+        candidate.skills.clear()
+        db.flush()
         candidate.skills = [
             Skill(
                 name=name,
