@@ -244,6 +244,15 @@ Render, set `CORS_ORIGINS` to your Vercel domain and restart the service.
   `User`/`Candidate`/role model is unaffected; Firebase only replaces the login box.
 - The original Streamlit apps and the `preprocessing/` package are left in place for
   reference; nothing in `backend/` or `frontend/` depends on them.
+- **No migration framework — the app heals its own schema on startup.** There has
+  never been an Alembic (or similar) setup here, so `app.core.migrations.sync_schema`
+  runs on every startup instead: it creates any table that doesn't exist yet (what
+  `Base.metadata.create_all` already did), then adds any column that's on a model but
+  missing from an existing table, backfilling it for existing rows from that column's
+  default. This only ever adds columns — never renames, drops or changes one — which
+  is all a schema change here has needed so far. If a future change needs more than
+  that (a rename, a drop, backfilling a computed value, a non-nullable column on a
+  populated table), that's the point to bring in a real migration tool instead.
 
 ## Credits
 

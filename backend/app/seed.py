@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from app.core.config import BACKEND_DIR, settings
 from app.core.database import SessionLocal, engine
+from app.core.migrations import sync_schema
 from app.models import Base, Candidate, Job, JobStatus, ProcessingStatus, Upload
 from app.services import pipeline, ranking
 
@@ -154,7 +155,7 @@ def main() -> int:
         Base.metadata.drop_all(engine)
         print("Dropped all tables.")
 
-    Base.metadata.create_all(engine)
+    sync_schema(engine)
     print(f"Seeding {settings.sqlalchemy_url}\n")
 
     db = SessionLocal()

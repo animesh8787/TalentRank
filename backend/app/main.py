@@ -11,7 +11,7 @@ from sqlalchemy.engine import make_url
 from app.api.routes import analytics, auth, candidates, jobs, matches, uploads
 from app.core.config import settings
 from app.core.database import engine
-from app.models import Base
+from app.core.migrations import sync_schema
 from app.services import embeddings, pipeline
 
 logging.basicConfig(
@@ -23,7 +23,7 @@ logger = logging.getLogger("talentrank")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Base.metadata.create_all(engine)
+    sync_schema(engine)
     pipeline.start_workers()
     # Load the embedding model off the request path so the first upload is fast.
     embeddings.warm_up()
