@@ -1,0 +1,4 @@
+# Optional: run the embedding model locally instead of via the HF Inference API.
+# Pulls in torch (~800 MB), so it is not part of the default / Render install.
+-r requirements.txt
+sentence-transformers>=3.0

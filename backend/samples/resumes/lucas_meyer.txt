@@ -1,0 +1,23 @@
+Lucas Meyer
+Backend Engineer
+Berlin, Germany
+lucas.meyer@example.com | +49 151 2345 6789
+
+Summary
+5 years of experience in Go and Python backend services.
+
+Experience
+Backend Engineer at Brandenburg Software, Feb 2019 - Present
+Designed microservices in Go with PostgreSQL, Redis and Kubernetes.
+
+Technical Skills
+Go, Python, PostgreSQL, Redis, Kubernetes, Docker, gRPC, GraphQL, Linux
+
+Projects
+Rate Limiter
+Token bucket library in Go with Redis.
+Log Pipeline
+Ingestion service using Python and Elasticsearch.
+
+Education
+Master of Science in Informatics, Technical University of Munich, 2018

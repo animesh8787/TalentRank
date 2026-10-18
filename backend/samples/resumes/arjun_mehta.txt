@@ -1,0 +1,15 @@
+Arjun Mehta
+Mobile Developer
+Pune, India
+arjun.mehta@example.com
++91 99211 33445
+
+Experience
+Android Developer, AppForge Technologies, 2020 - Present
+Developed Android apps in Kotlin using Jetpack Compose and Firebase.
+
+Skills
+Kotlin, Java, Android, Jetpack Compose, Firebase, Git, SQL
+
+Education
+Bachelors in Computer Applications (BCA), Savitribai Phule Pune University, 2020

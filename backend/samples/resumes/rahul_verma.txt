@@ -1,0 +1,29 @@
+RAHUL VERMA
+Full Stack Developer
+Hyderabad
+rahul.verma@example.com | 9876543210
+github.com/rahulverma-demo
+
+PROFESSIONAL SUMMARY
+Full stack engineer with 4 years of experience in React, Node.js and PostgreSQL.
+
+WORK EXPERIENCE
+Software Engineer - Zentech Solutions (2021 - Present)
+Built customer dashboards in React and TypeScript with a Node.js and Express backend.
+Junior Developer - PixelCraft (2019 - 2021)
+Maintained REST API services and wrote unit testing suites.
+
+PROJECTS
+Expense Tracker
+A budgeting app built with React, Node.js and MongoDB. https://github.com/rahulverma-demo/expense-tracker
+Chat Room
+Real time chat using WebSocket and Redis.
+
+TECHNICAL SKILLS
+JavaScript, TypeScript, React, Node.js, Express, MongoDB, PostgreSQL, Docker, Git
+
+EDUCATION
+B.Tech Computer Science, National Institute of Technology Warangal, 2019
+
+COURSES
+Full Stack Open - University of Helsinki 2020

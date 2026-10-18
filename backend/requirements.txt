@@ -15,7 +15,8 @@ pypdf>=5.0
 python-docx>=1.1
 
 # --- NLP / matching ---
-sentence-transformers>=3.0
+# Semantic embeddings come from the Hugging Face Inference API when HF_TOKEN is
+# set (no torch needed). For fully local embeddings install requirements-ml.txt.
 scikit-learn>=1.5
 numpy>=1.26
 

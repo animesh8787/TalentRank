@@ -1,0 +1,30 @@
+Priya Nair
+Senior Data Scientist
+Bengaluru | +91 98450 12345 | priya.nair@example.com
+linkedin.com/in/priya-nair-demo | github.com/priyanair-demo
+
+SUMMARY
+Data scientist with 7 years of experience building production machine learning systems in Python.
+
+EXPERIENCE
+Senior Data Scientist | Flipmart Labs | Jan 2020 - Present
+Led a team building recommendation models with PyTorch and Spark.
+Data Scientist | Insightly Analytics | Jun 2016 - Dec 2019
+Built forecasting pipelines in Python, SQL and Airflow.
+
+PROJECTS
+Churn Predictor | Python, XGBoost, FastAPI
+Built a churn model and served it with FastAPI on AWS.
+
+Resume Screener - NLP
+Developed an NLP classifier using transformers and scikit-learn.
+
+SKILLS
+Python, SQL, Machine Learning, Deep Learning, NLP, PyTorch, TensorFlow, Pandas, Spark, AWS, Docker
+
+EDUCATION
+M.Tech in Computer Science, Indian Institute of Technology Madras, 2016
+
+CERTIFICATIONS
+Deep Learning Specialization - Coursera 2019
+AWS Certified Machine Learning Specialty by Amazon (2021)

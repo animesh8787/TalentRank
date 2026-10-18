@@ -1,0 +1,18 @@
+Sara Khan
+Business Analyst
+Mumbai | sara.khan@example.com | +91 98200 11223
+
+Professional Experience
+Business Analyst, Finserve Corp, Aug 2017 - Present
+Built dashboards in Tableau and Power BI, wrote SQL for data analysis, ran agile ceremonies.
+
+Skills
+SQL, Tableau, Power BI, Data Analysis, Statistics, Agile, Scrum, Project Management
+
+Education
+MBA, Narsee Monjee Institute of Management Studies, 2017
+B.Com, Mumbai University, 2015
+
+Certifications
+Certified Scrum Master - Scrum Alliance 2019
+Google Data Analytics Certificate, Coursera

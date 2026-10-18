@@ -1,19 +1,26 @@
 """Semantic text embeddings with a graceful offline fallback.
 
-The old system scored with `TfidfVectorizer.fit_transform([resume, job])` per
-candidate. That is wrong twice over: a two-document corpus makes IDF meaningless,
-and refitting per candidate means scores are computed in different vector spaces
-and cannot be compared to each other — which is exactly what a ranking does.
+Scoring compares a resume with a job in one shared vector space, so similarities
+are directly comparable across candidates. Three backends, tried in this order:
 
-Here a single sentence-transformer encodes everything into one shared space, so
-cosine similarities are directly comparable. If the model cannot be loaded (no
-network on first run, or EMBEDDINGS_ENABLED=false), we fall back to a TF-IDF
-vectoriser fitted **once over the whole corpus**, which is still comparable.
+1. **Hugging Face Inference API** (set `HF_TOKEN`). Embeddings are computed
+   remotely, so the server needs no torch and fits a 512 MB free-tier host.
+2. **Local sentence-transformers** (optional: `pip install -r requirements-ml.txt`).
+   Same default model, so vectors from backends 1 and 2 are interchangeable.
+3. **TF-IDF** fitted once over the whole corpus. No model, still comparable
+   across candidates, but lexical only: "ML" will not match "machine learning".
+
+`EMBEDDINGS_ENABLED=false` forces backend 3. `/api/health` reports which one is
+live.
 """
 from __future__ import annotations
 
+import json
 import logging
 import threading
+import urllib.error
+import urllib.request
+from collections import OrderedDict
 
 import numpy as np
 
@@ -27,12 +34,66 @@ _model_lock = threading.Lock()
 # A single boolean cannot distinguish "still loading" from "failed", which made
 # /api/health report the fallback while the model was still downloading.
 _state = "idle"
+_backend = "tfidf"  # "hf-inference" | "sentence-transformers" | "tfidf"
 _load_error: str | None = None
 
+_HF_BATCH = 16
+_HF_MAX_CHARS = 1500  # the model reads ~256 tokens; keep requests small
+_HF_TIMEOUT = 30
 
+# Skill names repeat across every candidate/job pair, so cache their vectors:
+# without this a remote backend would make a network call per pair.
+_term_cache: OrderedDict[str, list[float]] = OrderedDict()
+_TERM_CACHE_MAX = 5000
+_cache_lock = threading.Lock()
+
+
+# --------------------------------------------------------------------------- #
+# Hugging Face Inference API
+# --------------------------------------------------------------------------- #
+def _hf_embed(texts: list[str]) -> list[list[float]]:
+    """Embed texts through the HF Inference API; raises on any failure."""
+    url = settings.hf_embeddings_url.format(model=settings.embedding_model)
+    vectors: list[list[float]] = []
+    for start in range(0, len(texts), _HF_BATCH):
+        chunk = [t[:_HF_MAX_CHARS] or " " for t in texts[start:start + _HF_BATCH]]
+        body = json.dumps({"inputs": chunk, "options": {"wait_for_model": True}}).encode()
+        request = urllib.request.Request(
+            url,
+            data=body,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {settings.hf_token}",
+                "Content-Type": "application/json",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=_HF_TIMEOUT) as response:
+                payload = json.loads(response.read().decode())
+        except urllib.error.HTTPError as exc:
+            raise RuntimeError(f"HF Inference API returned HTTP {exc.code}") from None
+        except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+            raise RuntimeError(f"HF Inference API unreachable: {exc}") from None
+        if (
+            not isinstance(payload, list)
+            or len(payload) != len(chunk)
+            or not all(isinstance(row, list) and row and isinstance(row[0], float) for row in payload)
+        ):
+            raise RuntimeError("HF Inference API returned an unexpected shape")
+        vectors.extend(payload)
+
+    matrix = np.asarray(vectors, dtype=float)
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return (matrix / norms).tolist()
+
+
+# --------------------------------------------------------------------------- #
+# Backend selection
+# --------------------------------------------------------------------------- #
 def _load_model():
-    """Load the sentence-transformer once, tolerating failure."""
-    global _model, _state, _load_error
+    """Pick and initialise a backend once, tolerating failure."""
+    global _model, _state, _backend, _load_error
 
     if _state in {"ready", "failed", "disabled"}:
         return _model
@@ -49,33 +110,43 @@ def _load_model():
 
         _state = "loading"
 
+    if settings.hf_token:
+        try:
+            _hf_embed(["warm-up"])
+        except Exception as exc:  # noqa: BLE001 - fall through to the local model
+            _load_error = f"{type(exc).__name__}: {exc}"
+            logger.warning("HF Inference API unusable (%s); trying a local model.", _load_error)
+        else:
+            _backend, _state, _load_error = "hf-inference", "ready", None
+            logger.info("Embeddings via Hugging Face Inference API (%s).", settings.embedding_model)
+            return None
+
     try:
         from sentence_transformers import SentenceTransformer
 
         logger.info("Loading embedding model %s ...", settings.embedding_model)
         model = SentenceTransformer(settings.embedding_model)
     except Exception as exc:  # noqa: BLE001 - any failure means fallback
-        _load_error = f"{type(exc).__name__}: {exc}"
+        _load_error = _load_error or f"{type(exc).__name__}: {exc}"
         _state = "failed"
         logger.warning(
-            "Could not load embedding model (%s). Falling back to TF-IDF.", _load_error
+            "No embedding backend available (%s). Falling back to TF-IDF.", _load_error
         )
         return None
 
     _model = model
-    _state = "ready"
+    _backend, _state, _load_error = "sentence-transformers", "ready", None
     logger.info("Embedding model ready.")
     return _model
 
 
-def _wait_for_model(timeout: float = 120.0):
-    """Block until a concurrent warm-up finishes, then return the model."""
+def _wait_for_model(timeout: float = 120.0) -> None:
+    """Block until a concurrent warm-up finishes."""
     import time
 
     deadline = time.monotonic() + timeout
     while _state == "loading" and time.monotonic() < deadline:
         time.sleep(0.1)
-    return _model
 
 
 def backend_status() -> dict[str, object]:
@@ -90,7 +161,7 @@ def backend_status() -> dict[str, object]:
     }[_state]
 
     return {
-        "backend": "sentence-transformers" if ready or state == "loading" else "tfidf",
+        "backend": _backend if ready else ("embeddings" if state == "loading" else "tfidf"),
         "state": state,
         "model": settings.embedding_model if ready else "tfidf-fallback",
         "enabled": settings.embeddings_enabled,
@@ -100,7 +171,7 @@ def backend_status() -> dict[str, object]:
 
 
 def warm_up() -> None:
-    """Load the model off the request path, at application startup."""
+    """Initialise the backend off the request path, at application startup."""
     threading.Thread(target=_load_model, name="embedding-warmup", daemon=True).start()
 
 
@@ -109,10 +180,19 @@ def embed(texts: list[str]) -> list[list[float]] | None:
     if not texts:
         return []
     model = _load_model()
-    if model is None and _state == "loading":
+    if _state == "loading":
         # A warm-up is in flight — wait for it rather than silently downgrading
         # this request to the keyword fallback.
-        model = _wait_for_model()
+        _wait_for_model()
+        model = _model
+    if _state != "ready":
+        return None
+    if _backend == "hf-inference":
+        try:
+            return _hf_embed(texts)
+        except Exception as exc:  # noqa: BLE001 - a flaky API must not fail scoring
+            logger.warning("HF embedding request failed (%s); using TF-IDF for this request.", exc)
+            return None
     if model is None:
         return None
     vectors = model.encode(
@@ -124,6 +204,26 @@ def embed(texts: list[str]) -> list[list[float]] | None:
 def embed_one(text: str) -> list[float] | None:
     result = embed([text])
     return result[0] if result else None
+
+
+def embed_terms(terms: list[str]) -> list[list[float]] | None:
+    """Like `embed`, for short repeated strings (skill names), with a cache."""
+    with _cache_lock:
+        missing = list(dict.fromkeys(t for t in terms if t not in _term_cache))
+    if missing:
+        fresh = embed(missing)
+        if fresh is None:
+            return None
+        with _cache_lock:
+            for term, vector in zip(missing, fresh):
+                _term_cache[term] = vector
+            while len(_term_cache) > _TERM_CACHE_MAX:
+                _term_cache.popitem(last=False)
+    with _cache_lock:
+        try:
+            return [_term_cache[t] for t in terms]
+        except KeyError:  # evicted between the two steps; extremely rare
+            return embed(terms)
 
 
 def cosine(a: list[float] | None, b: list[float] | None) -> float:
@@ -163,8 +263,8 @@ def similarity_matrix(sources: list[str], targets: list[str]) -> np.ndarray | No
     """Pairwise cosine similarity between two text lists, or None if no model."""
     if not sources or not targets:
         return None
-    source_vectors = embed(sources)
-    target_vectors = embed(targets)
+    source_vectors = embed_terms(sources)
+    target_vectors = embed_terms(targets)
     if source_vectors is None or target_vectors is None:
         return None
     return np.asarray(source_vectors) @ np.asarray(target_vectors).T

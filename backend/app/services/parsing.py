@@ -1,10 +1,8 @@
 """Structured field extraction from resume text.
 
-Deliberately spaCy-free. The old code called `spacy.load('en_core_web_lg')` in
-five places for entity extraction that barely fed the score, and the model was
-never installed so every path crashed. Rule-based extraction over a curated
-taxonomy plus sentence embeddings for the semantic work gives better results
-here without a 560MB model download.
+Deliberately spaCy-free: rule-based extraction over a curated taxonomy, with
+sentence embeddings (see embeddings.py) doing the semantic work. No 560MB model
+download, and every extractor is plain regex you can read and test.
 """
 from __future__ import annotations
 
@@ -53,6 +51,21 @@ class ParsedEducation:
 
 
 @dataclass
+class ParsedProject:
+    name: str
+    description: str | None = None
+    technologies: list[str] = field(default_factory=list)
+    url: str | None = None
+
+
+@dataclass
+class ParsedCertification:
+    name: str
+    issuer: str | None = None
+    issue_date: str | None = None
+
+
+@dataclass
 class ParsedResume:
     full_name: str | None = None
     email: str | None = None
@@ -68,6 +81,8 @@ class ParsedResume:
     skills: list[ParsedSkill] = field(default_factory=list)
     experiences: list[ParsedExperience] = field(default_factory=list)
     educations: list[ParsedEducation] = field(default_factory=list)
+    projects: list[ParsedProject] = field(default_factory=list)
+    certifications: list[ParsedCertification] = field(default_factory=list)
     sections_found: dict[str, bool] = field(default_factory=dict)
 
 
@@ -408,6 +423,173 @@ def extract_experiences(text: str) -> list[ParsedExperience]:
     return experiences
 
 
+# --------------------------------------------------------------------------- #
+# Sections: projects and certifications
+# --------------------------------------------------------------------------- #
+# Every heading that can end a section. Projects and certifications are read
+# from the lines between their own heading and the next heading of any kind.
+_HEADING_WORDS = (
+    r"summary|profile|objective|about(?:\s+me)?|experience|employment(?:\s+history)?|"
+    r"work\s+history|education|academics?|academic\s+(?:background|qualifications?)|"
+    r"qualifications?|skills|technologies|projects?|personal\s+projects?|"
+    r"academic\s+projects?|certifications?|licen[sc]es?|courses?|"
+    r"training|achievements?|awards?|honou?rs|publications?|interests|hobbies|"
+    r"languages|references|extracurriculars?|extra[- ]curricular(?:\s+activities)?|"
+    r"volunteering|volunteer\s+experience|declaration|personal\s+details"
+)
+_HEADING_RE = re.compile(
+    rf"^(?:(?:my|key|core|technical|professional|relevant|work|academic|personal)\s+)?"
+    rf"(?:{_HEADING_WORDS})(?:\s*(?:and|&|/)\s*\w+)?\s*:?$",
+    re.I,
+)
+_PROJECT_HEADING = re.compile(r"^(?:\w+\s+)?(?:projects?|portfolio|assignments?)(?:\s*(?:and|&)\s*\w+)?$", re.I)
+_CERT_HEADING = re.compile(
+    r"^(?:\w+\s+)?(?:certifications?|licen[sc]es?|courses?|training)(?:\s*(?:and|&)\s*\w+)?$", re.I
+)
+# A line starting with one of these is describing work, not naming a project.
+_ACTION_START = re.compile(
+    r"^(built|developed|implemented|designed|created|used|using|worked|led|managed|"
+    r"integrated|deployed|trained|achieved|improved|reduced|increased|wrote|"
+    r"engineered|automated|optimi[sz]ed|analy[sz]ed|collaborated|responsible|"
+    r"features?|tech(?:nologies)?|stack|tools?|link|github|demo|description)\b",
+    re.I,
+)
+_SEPARATOR = re.compile(r"\s+[|\u2013\u2014-]\s+|\s*[|\u2013\u2014]\s*")
+
+
+def _clean_bullet(line: str) -> str:
+    return re.sub(r"^[\s\-\u2022*\u25cf\u25aa>]+", "", line).strip()
+
+
+def section_lines(text: str, wanted: re.Pattern) -> list[str]:
+    """Lines under the first heading matching `wanted`, up to the next heading."""
+    lines = text.split("\n")
+    collecting = False
+    out: list[str] = []
+    for raw in lines:
+        stripped = raw.strip()
+        candidate = stripped.rstrip(":").strip()
+        is_heading = bool(candidate) and len(candidate) <= 45 and bool(_HEADING_RE.match(candidate))
+        if is_heading:
+            if collecting:
+                break
+            if wanted.match(candidate):
+                collecting = True
+            continue
+        if collecting:
+            out.append(stripped)
+    return out
+
+
+def _technologies_in(text: str) -> list[str]:
+    lowered = text.lower()
+    found = [
+        skill for skill in tx.ALL_SKILLS
+        if re.search(rf"(?<![\w+#.]){re.escape(skill)}(?![\w+#])", lowered)
+    ]
+    # Drop short names shadowed by a longer match ("sql" inside "postgresql").
+    return sorted(s for s in found if not any(s != o and s in o and len(s) <= 4 for o in found))
+
+
+def extract_projects(text: str) -> list[ParsedProject]:
+    """Projects from the PROJECTS section (heuristic: a project starts at a
+    short title-like line that is not a sentence; following lines describe it)."""
+    lines = section_lines(text, _PROJECT_HEADING)
+    projects: list[ParsedProject] = []
+    current: dict | None = None
+
+    def flush() -> None:
+        nonlocal current
+        if current:
+            body = " ".join(current["body"]).strip()
+            blob = f"{current['name']} {body}"
+            url = tx.URL_RE.search(blob)
+            projects.append(ParsedProject(
+                name=current["name"][:255],
+                description=body[:1000] or None,
+                technologies=_technologies_in(blob),
+                url=url.group(0).rstrip(".,;") if url else None,
+            ))
+        current = None
+
+    after_blank = True
+    for raw in lines:
+        if not raw:
+            after_blank = True
+            continue
+        line = _clean_bullet(raw)
+        if not line:
+            continue
+        # A new project starts at a short, sentence-less line when the previous
+        # project's text looks finished (blank line, closing full stop or URL),
+        # or the line carries a "Title | tech" separator. A wrapped description
+        # line ("... using" / "Python and Flask.") never follows a finished one.
+        last = current["body"][-1] if current and current["body"] else ""
+        previous_finished = bool(last) and (
+            last.endswith((".", "!", ")")) or bool(tx.URL_RE.search(last.split()[-1]))
+        )
+        looks_like_title = (
+            len(line) <= 100
+            and not line.endswith(".")
+            and not _ACTION_START.match(line)
+            and (line[0].isupper() or line[0].isdigit())
+            and (
+                current is None
+                or not current["body"]
+                or after_blank
+                or previous_finished
+                or bool(_SEPARATOR.search(line))
+            )
+        )
+        after_blank = False
+        if looks_like_title:
+            flush()
+            title = _SEPARATOR.split(line, maxsplit=1)
+            current = {"name": title[0].strip(" :-"), "body": title[1:] and [title[1]] or []}
+        elif current is not None:
+            current["body"].append(line)
+    flush()
+    return [p for p in projects if len(p.name) >= 2][:12]
+
+
+_YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
+
+
+def extract_certifications(text: str) -> list[ParsedCertification]:
+    """Certifications: one per non-empty line of the CERTIFICATIONS section.
+
+    The issuer is whatever follows "by"/"from" or a separator ("AWS Cloud
+    Practitioner - Amazon"); the year, if any, becomes the issue date.
+    """
+    certs: list[ParsedCertification] = []
+    for raw in section_lines(text, _CERT_HEADING):
+        line = _clean_bullet(raw)
+        if len(line) < 4 or _ACTION_START.match(line):
+            continue
+        year = _YEAR.search(line)
+        bare = _YEAR.sub("", line)
+        bare = re.sub(r"[()\[\]]", " ", bare)
+        issuer = None
+        by = re.search(r"\b(?:by|from|issued\s+by|offered\s+by)\s+([A-Z][\w&.' ]{1,60})", bare)
+        if by:
+            issuer = by.group(1).strip(" ,.-")
+            bare = bare[: by.start()]
+        else:
+            parts = [p.strip(" ,.-") for p in _SEPARATOR.split(bare) if p.strip(" ,.-")]
+            if len(parts) == 1 and "," in parts[0]:
+                parts = [p.strip(" ,.-") for p in parts[0].rsplit(",", 1)]
+            if len(parts) > 1:
+                bare, issuer = parts[0], parts[-1]
+        name = re.sub(r"\s{2,}", " ", bare).strip(" ,.-:|")
+        if len(name) >= 3:
+            certs.append(ParsedCertification(
+                name=name[:255],
+                issuer=issuer[:255] if issuer else None,
+                issue_date=year.group(0) if year else None,
+            ))
+    return certs[:15]
+
+
 def detect_sections(text: str) -> dict[str, bool]:
     return {name: bool(pattern.search(text)) for name, pattern in tx.SECTION_HEADINGS.items()}
 
@@ -436,5 +618,7 @@ def parse_resume(text: str) -> ParsedResume:
         skills=extract_skills(text),
         experiences=extract_experiences(text),
         educations=educations,
+        projects=extract_projects(text),
+        certifications=extract_certifications(text),
         sections_found=detect_sections(text),
     )

@@ -58,6 +58,14 @@ class Settings:
     storage_dir: Path = field(default_factory=lambda: _resolve(os.getenv("STORAGE_DIR", "./storage/resumes")))
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     embeddings_enabled: bool = field(default_factory=lambda: _bool("EMBEDDINGS_ENABLED", True))
+    # Hugging Face Inference API token. When set, embeddings are computed
+    # remotely (no torch needed on the server); otherwise the optional local
+    # sentence-transformers install is used if present, else TF-IDF.
+    hf_token: str | None = os.getenv("HF_TOKEN") or None
+    hf_embeddings_url: str = os.getenv(
+        "HF_EMBEDDINGS_URL",
+        "https://router.huggingface.co/hf-inference/models/{model}/pipeline/feature-extraction",
+    )
     cors_origins: tuple[str, ...] = field(
         default_factory=lambda: tuple(
             o.strip()

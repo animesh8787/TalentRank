@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 SUPPORTED_SUFFIXES = {".pdf", ".docx", ".txt"}
+# Fewer words per page than this and a PDF is treated as a scan and rejected.
+MIN_WORDS_PER_PAGE = 40
 UNSUPPORTED_LEGACY = {".doc", ".rtf", ".odt", ".pages"}
 
 
@@ -24,7 +26,7 @@ class ExtractedDocument:
     text: str
     page_count: int = 0
     word_count: int = 0
-    # True when a PDF yielded almost no text, which usually means it is a scan.
+    # Kept for callers; scans are now rejected with ExtractionError before this is set.
     looks_like_scan: bool = False
     warnings: list[str] = field(default_factory=list)
 
@@ -64,11 +66,12 @@ def _extract_pdf(path: Path) -> ExtractedDocument:
     text = normalise("\n".join(pages))
     words = len(text.split())
     # A text-bearing resume page yields well over 40 words; below that it is a scan.
-    looks_like_scan = len(reader.pages) > 0 and words < 40 * len(reader.pages)
+    looks_like_scan = len(reader.pages) > 0 and words < MIN_WORDS_PER_PAGE * len(reader.pages)
     if looks_like_scan:
-        warnings.append(
-            "Very little selectable text was found — this looks like a scanned "
-            "image. Export the resume as a text-based PDF so it can be read."
+        raise ExtractionError(
+            f"Only {words} word(s) of selectable text were found, so this looks like a "
+            "scanned image and needs OCR. Export the resume as a text-based PDF "
+            "(or upload a DOCX) so it can be read."
         )
     return ExtractedDocument(
         text=text,

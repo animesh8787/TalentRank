@@ -1,0 +1,26 @@
+Meera Iyer
+DevOps Engineer
+Chennai | meera.iyer@example.com | +91 90030 45678
+
+OBJECTIVE
+DevOps engineer with 6 years of experience automating cloud infrastructure.
+
+EXPERIENCE
+DevOps Engineer, Cloudwave Systems, Mar 2018 - Present
+Managed Kubernetes clusters on AWS with Terraform and Jenkins CI/CD.
+System Administrator, Netlink, 2016 - 2018
+Linux administration and Ansible automation.
+
+SKILLS
+Kubernetes, Docker, Terraform, AWS, Linux, Jenkins, Ansible, Prometheus, Grafana, Python, Bash
+
+PROJECTS
+Zero Downtime Deploys
+Implemented blue green deployments on Kubernetes with GitHub Actions.
+
+EDUCATION
+B.E. Electronics, Anna University, 2016
+
+CERTIFICATIONS
+- Certified Kubernetes Administrator, Cloud Native Computing Foundation, 2020
+- HashiCorp Terraform Associate, 2021

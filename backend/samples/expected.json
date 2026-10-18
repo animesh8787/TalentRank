@@ -1,0 +1,8 @@
+{
+  "priya_nair.txt":  {"full_name": "Priya Nair",  "email": "priya.nair@example.com",  "location": "Bengaluru", "years": 7,    "qualification": "Masters",   "projects": 2, "certifications": 2, "skills": ["python", "machine learning", "pytorch", "sql"]},
+  "rahul_verma.txt": {"full_name": "Rahul Verma", "email": "rahul.verma@example.com", "location": "Hyderabad", "years": 4,    "qualification": "Bachelors", "projects": 2, "certifications": 1, "skills": ["react", "node.js", "postgresql", "typescript"]},
+  "meera_iyer.txt":  {"full_name": "Meera Iyer",  "email": "meera.iyer@example.com",  "location": "Chennai",   "years": 6,    "qualification": "Bachelors", "projects": 1, "certifications": 2, "skills": ["kubernetes", "terraform", "aws", "jenkins"]},
+  "arjun_mehta.txt": {"full_name": "Arjun Mehta", "email": "arjun.mehta@example.com", "location": "Pune",      "years": null, "qualification": "Bachelors", "projects": 0, "certifications": 0, "skills": ["kotlin", "android", "firebase"]},
+  "sara_khan.txt":   {"full_name": "Sara Khan",   "email": "sara.khan@example.com",   "location": "Mumbai",    "years": null, "qualification": "Masters",   "projects": 0, "certifications": 2, "skills": ["sql", "tableau", "power bi", "agile"]},
+  "lucas_meyer.txt": {"full_name": "Lucas Meyer", "email": "lucas.meyer@example.com", "location": "Berlin",    "years": 5,    "qualification": "Masters",   "projects": 2, "certifications": 0, "skills": ["go", "postgresql", "kubernetes", "docker"]}
+}

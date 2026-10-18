@@ -1,8 +1,6 @@
 """Skill taxonomy, aliases and regex patterns.
 
-Consolidates the three divergent keyword lists that used to live in
-preprocessing/models/patterns.py, preprocessing/dataextraction.py and
-preprocessing/processors/resume_processor.py into one place.
+One place for the skill taxonomy, the few hard aliases, and the regexes parsing uses.
 """
 from __future__ import annotations
 
@@ -60,28 +58,24 @@ SKILL_TO_CATEGORY: dict[str, str] = {
 
 ALL_SKILLS: list[str] = sorted(SKILL_TO_CATEGORY, key=len, reverse=True)
 
-# Common shorthands recruiters and candidates actually type.
+# Deliberately small. Synonyms and spelling variants ("machine learning" vs
+# "ML engineering", "React.js" vs "React", "Amazon Web Services" vs "AWS") are
+# matched semantically by the embedding model in services/embeddings.py, not
+# listed here. These few entries are the exceptions an embedding model cannot
+# be trusted with: bare abbreviations of two or three letters, and names that
+# collide with ordinary words ("go") or punctuation (".net"). They also keep
+# SQL candidate filters, which compare strings exactly, working.
 SKILL_ALIASES: dict[str, str] = {
     "ml": "machine learning",
     "dl": "deep learning",
     "js": "javascript",
     "ts": "typescript",
     "py": "python",
-    "reactjs": "react", "react.js": "react",
-    "nodejs": "node.js", "node": "node.js",
-    "vuejs": "vue", "vue.js": "vue",
-    "postgres": "postgresql",
-    "k8s": "kubernetes",
-    "gcloud": "gcp", "google cloud platform": "gcp",
-    "amazon web services": "aws",
-    "sklearn": "scikit-learn", "scikit learn": "scikit-learn",
     "tf": "tensorflow",
     "cv": "computer vision",
-    "natural language processing": "nlp",
-    "ms sql": "sql", "sql server": "sql", "t-sql": "sql", "plsql": "sql",
-    "dotnet": "asp.net", ".net": "asp.net",
+    "k8s": "kubernetes",
     "golang": "go",
-    "cicd": "ci/cd", "ci cd": "ci/cd",
+    "dotnet": "asp.net", ".net": "asp.net",
 }
 
 EDUCATION_LEVELS: dict[str, int] = {
