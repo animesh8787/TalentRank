@@ -230,7 +230,7 @@ export function Field({
         {label}
       </Label>
       {React.isValidElement(children)
-        ? React.cloneElement(children as React.ReactElement, {
+        ? React.cloneElement(children as React.ReactElement<React.HTMLAttributes<HTMLElement>>, {
             id: htmlFor,
             'aria-describedby': [hintId, errorId].filter(Boolean).join(' ') || undefined,
             'aria-invalid': error ? true : undefined,
