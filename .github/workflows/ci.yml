@@ -25,7 +25,7 @@ jobs:
       - run: npm run build
 
   backend:
-    name: Backend import check
+    name: Backend tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -36,18 +36,17 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
-      - run: pip install -r requirements.txt
-      # Full CPU-only sentence-transformers install is slow and unnecessary
-      # just to prove the app boots — EMBEDDINGS_ENABLED=false exercises the
-      # TF-IDF fallback path instead, keeping CI fast.
-      - name: Verify the app initialises and every route module imports
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      # Slim install: no torch, no sentence-transformers. The suite runs on the
+      # TF-IDF path, which is also what a host without HF_TOKEN uses.
+      - run: pip install -r requirements-dev.txt
+      - name: Tests (scoring, anonymisation, tenancy scoping, CSV escaping, ingestion)
         env:
           EMBEDDINGS_ENABLED: "false"
-        run: |
-          python -c "
-          from app.main import app
-          routes = [r.path for r in app.routes if hasattr(r, 'methods')]
-          assert any('/api/health' in p for p in routes), 'health route missing'
-          print(f'{len(routes)} routes registered OK')
-          "
+        run: python -m pytest -q
+      - name: Parser regression check on the sample resumes
+        env:
+          EMBEDDINGS_ENABLED: "false"
+        run: python -m app.eval_parsing
