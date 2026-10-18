@@ -58,7 +58,7 @@ const FEATURES = [
     icon: Sparkles,
     title: 'Semantic matching',
     description:
-      'Understands that "ML" means machine learning and "React.js" means React, without a hardcoded synonym list.',
+      'Embedding-based matching connects "Amazon Web Services" with AWS and "React.js" with React, instead of requiring an exact keyword.',
   },
   {
     icon: SlidersHorizontal,
@@ -70,7 +70,7 @@ const FEATURES = [
     icon: EyeOff,
     title: 'Blind review mode',
     description:
-      'Hide names, contact details and universities for a first pass focused on skills — redaction happens server-side.',
+      'Turn it on per role: names, contact details, universities and resume files are hidden by the server for everyone reviewing that role.',
   },
   {
     icon: Columns3,
@@ -104,7 +104,7 @@ const STEPS = [
   },
 ] as const
 
-const STACK = ['FastAPI', 'React 19', 'Firebase Auth', 'Sentence Transformers', 'SQLAlchemy']
+const STACK = ['FastAPI', 'React 19', 'Firebase Auth', 'Hugging Face embeddings', 'SQLAlchemy']
 
 export function LandingPage() {
   const [scrolled, setScrolled] = React.useState(false)
@@ -444,7 +444,7 @@ function SpotlightExplainability() {
             </p>
             <ul className="mt-6 space-y-3">
               {[
-                'Semantic matching catches "ML" and "React.js" without a hardcoded synonym list',
+                'Embedding-based matching catches "React.js" for "React" and "Amazon Web Services" for "AWS"',
                 'Missing-skill chips tell a recruiter exactly what to ask about in the interview',
                 'Live weight sliders re-rank instantly — nothing saved until you apply it',
               ].map((text) => (
@@ -543,16 +543,16 @@ function SpotlightBlindReview() {
               Cut bias with one click
             </h2>
             <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
-              Toggle blind review and every name, contact detail, university and precise location
-              is replaced with a stable alias — server-side, so the real values never even reach
-              the browser. Skills, experience and evidence stay fully visible, because that's what
+              Switch blind review on for a role and every name, contact detail, university, precise
+              location and resume file is withheld, with a stable alias in their place — server-side,
+              so the real values never even reach the browser. Skills, experience and evidence stay fully visible, because that's what
               a first pass should actually judge on.
             </p>
             <ul className="mt-6 space-y-3">
               {[
                 'Redaction happens on the backend, not hidden with CSS in the browser',
                 'The same candidate keeps the same alias across the whole review',
-                'Turn it off at any point once you\'re ready to see full profiles',
+                'Enforced per role by the server, so a teammate cannot switch it off from their browser',
               ].map((text) => (
                 <li key={text} className="flex items-start gap-2.5 text-sm">
                   <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />

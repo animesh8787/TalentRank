@@ -45,7 +45,7 @@ def _resolve(raw: str) -> Path:
 
 @dataclass(frozen=True)
 class Settings:
-    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./storage/talentrank.db")
+    database_url: str = os.getenv("DATABASE_URL") or "sqlite:///./storage/talentrank.db"
     firebase_credentials_file: Path = field(
         default_factory=lambda: _resolve(
             os.getenv("FIREBASE_CREDENTIALS_FILE", "./firebase-service-account.json")

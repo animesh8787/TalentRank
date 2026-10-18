@@ -152,7 +152,7 @@ export function LoginPage() {
           </p>
           <ul className="space-y-3 text-sm">
             {[
-              { icon: Sparkles, text: 'Semantic matching that knows ML means machine learning' },
+              { icon: Sparkles, text: 'Semantic matching that goes beyond exact keywords' },
               { icon: CheckCircle2, text: 'Every score traced back to a line in the resume' },
               { icon: ShieldCheck, text: 'Blind review mode to cut bias on the first pass' },
               { icon: Users, text: 'Pipeline, notes and shortlists in one place' },

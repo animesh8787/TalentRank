@@ -146,7 +146,7 @@ export function ScoreBar({
   )
 }
 
-/** The five-dimension breakdown, sorted by contribution. */
+/** The seven-dimension breakdown, sorted by contribution. */
 export function ScoreBreakdown({
   dimensions,
   compact,

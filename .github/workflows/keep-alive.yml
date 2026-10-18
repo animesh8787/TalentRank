@@ -12,13 +12,11 @@ jobs:
     steps:
       - name: Ping TalentRank API
         run: |
-          # Render free tier spins the service down after 15 min idle, and
-          # cold boot here also has to load the sentence-transformers model
-          # synchronously (see backend/app/main.py's embeddings.warm_up()),
-          # which routinely takes well over 20s. A short timeout means this
-          # job fails on almost every cold start instead of waking the
-          # service back up, so allow enough time for a full cold boot and
-          # retry once in case the first attempt lands mid-boot.
+          # Render free tier spins the service down after 15 min idle. A cold
+          # boot installs nothing at request time but still takes a while
+          # (Python start, schema sync, and the first embeddings call when
+          # HF_TOKEN is set), so allow plenty of time and retry once in case
+          # the first attempt lands mid-boot.
           curl --fail --silent --show-error \
             --max-time 120 \
             --retry 1 \
