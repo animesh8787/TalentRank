@@ -34,6 +34,15 @@ export interface User {
   full_name: string
   role: UserRole
   is_active: boolean
+  org_id: number | null
+  org_name: string | null
+}
+
+export interface Organization {
+  id: number
+  name: string
+  invite_code: string
+  member_count: number
 }
 
 export interface JobWeights {
@@ -65,6 +74,8 @@ export interface Job {
   salary_min: number | null
   salary_max: number | null
   status: JobStatus
+  /** Server-enforced: candidates for this role are always shown redacted. */
+  blind_review: boolean
   created_at: string
   updated_at: string
   weights: JobWeights
@@ -131,6 +142,8 @@ export interface Candidate {
   highest_qualification: string | null
   university: string | null
   source_filename: string | null
+  /** Latest uploaded resume file, for the in-app viewer (null when withheld). */
+  latest_upload_id: number | null
   health_score: number
   verified_by_candidate: boolean
   created_at: string

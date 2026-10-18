@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.engine import make_url
 
-from app.api.routes import analytics, auth, candidates, jobs, matches, uploads
+from app.api.routes import analytics, auth, candidates, jobs, matches, orgs, uploads
 from app.core.config import settings
 from app.core.database import engine
 from app.core.migrations import sync_schema
@@ -25,6 +25,8 @@ logger = logging.getLogger("talentrank")
 async def lifespan(_: FastAPI):
     sync_schema(engine)
     pipeline.start_workers()
+    # The work queue is in memory; pick up anything a restart interrupted.
+    pipeline.requeue_unfinished()
     # Load the embedding model off the request path so the first upload is fast.
     embeddings.warm_up()
     # hide_password so credentials never end up in Render's (persisted) log stream.
@@ -51,7 +53,7 @@ app.add_middleware(
 
 for router in (
     auth.router, jobs.router, candidates.router, uploads.router,
-    matches.router, analytics.router,
+    matches.router, analytics.router, orgs.router,
 ):
     app.include_router(router, prefix="/api")
 

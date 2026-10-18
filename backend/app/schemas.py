@@ -29,6 +29,20 @@ class UserOut(ORMModel):
     full_name: str
     role: UserRole
     is_active: bool
+    org_id: int | None = None
+    org_name: str | None = None
+
+
+class OrgOut(ORMModel):
+    id: int
+    name: str
+    invite_code: str
+    member_count: int = 0
+
+
+class InviteCheckOut(BaseModel):
+    valid: bool
+    org_name: str | None = None
 
 
 class RegisterRequest(BaseModel):
@@ -39,6 +53,10 @@ class RegisterRequest(BaseModel):
     """
     full_name: str = Field(min_length=1, max_length=255)
     role: UserRole = UserRole.CANDIDATE
+    # Recruiters only. An invite code joins an existing team; otherwise a new
+    # organisation named `org_name` is created for the recruiter.
+    org_name: str | None = Field(None, max_length=255)
+    invite_code: str | None = Field(None, max_length=32)
 
 
 # --------------------------------------------------------------------------- #
@@ -94,6 +112,7 @@ class JobBase(BaseModel):
     salary_min: int | None = None
     salary_max: int | None = None
     status: JobStatus = JobStatus.ACTIVE
+    blind_review: bool = False
 
 
 class JobCreate(JobBase):
@@ -118,6 +137,7 @@ class JobUpdate(BaseModel):
     salary_min: int | None = None
     salary_max: int | None = None
     status: JobStatus | None = None
+    blind_review: bool | None = None
     weights: JobWeightsInput | None = None
 
 
@@ -140,6 +160,7 @@ class JobOut(ORMModel):
     salary_min: int | None
     salary_max: int | None
     status: JobStatus
+    blind_review: bool = False
     created_at: datetime
     updated_at: datetime
     weights: JobWeights
@@ -245,6 +266,7 @@ class CandidateOut(ORMModel):
     highest_qualification: str | None
     university: str | None
     source_filename: str | None
+    latest_upload_id: int | None = None
     health_score: float
     verified_by_candidate: bool
     created_at: datetime

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { AlertTriangle, ArrowLeft, CheckCircle2, FileSearch, ShieldCheck, Sparkles, Users } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { api } from '@/lib/api'
 import { friendlyAuthError, useAuth } from '@/hooks/providers'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import {
@@ -37,6 +38,10 @@ export function LoginPage() {
   const [password, setPassword] = React.useState('')
   const [fullName, setFullName] = React.useState('')
   const [role, setRole] = React.useState<'candidate' | 'recruiter'>('candidate')
+  // Recruiters either start a new team or join one with an invite code.
+  const [teamMode, setTeamMode] = React.useState<'create' | 'join'>('create')
+  const [orgName, setOrgName] = React.useState('')
+  const [inviteCode, setInviteCode] = React.useState('')
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname
 
@@ -49,6 +54,10 @@ export function LoginPage() {
     else if (mode === 'register' && password.length < 8)
       next.password = 'Use at least 8 characters.'
     if (mode === 'register' && !fullName.trim()) next.full_name = 'Enter your full name.'
+    if (mode === 'register' && role === 'recruiter') {
+      if (teamMode === 'join' && !inviteCode.trim()) next.invite_code = 'Enter the invite code from your teammate.'
+      if (teamMode === 'create' && !orgName.trim()) next.org_name = 'Give your team a name.'
+    }
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -59,6 +68,15 @@ export function LoginPage() {
 
     setPending(true)
     try {
+      // Check the code before a Firebase account exists, so a typo cannot
+      // leave someone with a login but no workspace.
+      if (mode === 'register' && role === 'recruiter' && teamMode === 'join') {
+        const check = await api.orgs.checkInvite(inviteCode)
+        if (!check.valid) {
+          setErrors({ invite_code: 'That invite code is not valid. Ask your teammate for a new one.' })
+          return
+        }
+      }
       const user =
         mode === 'login'
           ? await login(email.trim(), password)
@@ -67,6 +85,11 @@ export function LoginPage() {
               password,
               full_name: fullName.trim(),
               role,
+              ...(role === 'recruiter'
+                ? teamMode === 'join'
+                  ? { invite_code: inviteCode.trim() }
+                  : { org_name: orgName.trim() }
+                : {}),
             })
       toast.success(`Welcome, ${user.full_name}`)
       const isStaff = user.role === 'recruiter' || user.role === 'admin'
@@ -271,6 +294,53 @@ export function LoginPage() {
                   </SelectContent>
                 </Select>
               </Field>
+            )}
+
+            {mode === 'register' && role === 'recruiter' && (
+              <div className="space-y-3 rounded-md border bg-muted/30 p-3">
+                <Tabs value={teamMode} onValueChange={(value) => { setTeamMode(value as 'create' | 'join'); setErrors({}) }}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="create">New team</TabsTrigger>
+                    <TabsTrigger value="join">Join a team</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                {teamMode === 'create' ? (
+                  <Field
+                    label="Team name"
+                    htmlFor="org_name"
+                    error={errors.org_name}
+                    hint="Your jobs, uploads and candidates are private to your team."
+                  >
+                    <Input
+                      value={orgName}
+                      onChange={(event) => setOrgName(event.target.value)}
+                      placeholder="Acme Talent"
+                    />
+                  </Field>
+                ) : (
+                  <Field
+                    label="Invite code"
+                    htmlFor="invite_code"
+                    error={errors.invite_code}
+                    hint="Ask a teammate for the code on their Team page."
+                  >
+                    <Input
+                      value={inviteCode}
+                      onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
+                      autoComplete="off"
+                      placeholder="A1B2C3D4E5F6"
+                    />
+                  </Field>
+                )}
+              </div>
+            )}
+
+            {mode === 'register' && role === 'candidate' && (
+              <p className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+                By registering you agree that recruiters can see your profile and resume
+                <strong> only while it matches one of their open roles</strong>. Resumes you upload
+                are never visible to teams whose roles you do not match.
+              </p>
             )}
 
             <Button type="submit" className="w-full" size="lg" loading={pending}>

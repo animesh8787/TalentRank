@@ -97,6 +97,25 @@ export const useTheme = () => React.useContext(ThemeContext)
 /* -------------------------------------------------------------------------- */
 /* Auth                                                                       */
 /* -------------------------------------------------------------------------- */
+/**
+ * Fetch the TalentRank profile for the signed-in Firebase user, provisioning it
+ * if the first /auth/register never completed (closed tab, network drop). The
+ * backend answers 403 "not registered" for that case rather than 401, so a
+ * half-registered account is repaired here instead of being signed out. The
+ * fallback role is candidate: it can never grant staff access.
+ */
+async function loadProfile(): Promise<User> {
+  try {
+    return await api.auth.me()
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 403) throw error
+    const current = auth.currentUser
+    const fallbackName =
+      current?.displayName?.trim() || current?.email?.split('@')[0] || 'New user'
+    return api.auth.register({ full_name: fallbackName, role: 'candidate' })
+  }
+}
+
 interface AuthValue {
   user: User | null
   loading: boolean
@@ -107,6 +126,8 @@ interface AuthValue {
     password: string
     full_name: string
     role: 'recruiter' | 'candidate'
+    org_name?: string
+    invite_code?: string
   }) => Promise<User>
   logout: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
@@ -154,13 +175,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
       try {
-        const profile = await api.auth.me()
-        setUser(profile)
+        setUser(await loadProfile())
       } catch (error) {
-        // A verified Firebase account with no TalentRank profile yet, and not
-        // from an in-progress registration (that's the guard above) — e.g. a
-        // Firebase user created some other way. Don't leave the app stuck:
-        // sign out locally and send them back to register.
+        // An invalid or expired token. (A missing profile is repaired inside
+        // loadProfile, so it never ends up here.)
         if (error instanceof ApiError && error.status === 401) {
           await signOut(auth)
         }
@@ -177,7 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authActionInProgress.current = true
       try {
         await signInWithEmailAndPassword(auth, email, password)
-        const profile = await api.auth.me()
+        const profile = await loadProfile()
         setUser(profile)
         queryClient.clear()
         return profile
@@ -194,12 +212,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password: string
       full_name: string
       role: 'recruiter' | 'candidate'
+      org_name?: string
+      invite_code?: string
     }) => {
       authActionInProgress.current = true
       try {
         const credential = await createUserWithEmailAndPassword(auth, payload.email, payload.password)
         await updateProfile(credential.user, { displayName: payload.full_name })
-        const profile = await api.auth.register({ full_name: payload.full_name, role: payload.role })
+        const profile = await api.auth.register({
+          full_name: payload.full_name,
+          role: payload.role,
+          org_name: payload.org_name,
+          invite_code: payload.invite_code,
+        })
         setUser(profile)
         queryClient.clear()
         return profile

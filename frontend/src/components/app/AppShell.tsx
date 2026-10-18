@@ -14,6 +14,7 @@ import {
   Moon,
   ScrollText,
   Sun,
+  UserCog,
   Upload,
   UserCircle,
   Users,
@@ -49,6 +50,7 @@ const NAV: NavItem[] = [
   { to: '/upload', label: 'Upload', icon: Upload },
   { to: '/analytics', label: 'Analytics', icon: BarChart3, staffOnly: true },
   { to: '/activity', label: 'Activity', icon: ScrollText, staffOnly: true },
+  { to: '/team', label: 'Team', icon: UserCog, staffOnly: true },
   { to: '/my-resume', label: 'My resume', icon: UserCircle, candidateOnly: true },
 ]
 

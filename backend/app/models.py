@@ -1,9 +1,4 @@
-"""Single source of truth for the schema.
-
-Replaces the three conflicting definitions that used to live in
-preprocessing/Database_setup/db_design.py, preprocessing/database/schema.py and
-preprocessing/dataextraction.py. Primary keys are uniformly `id`.
-"""
+"""Single source of truth for the schema. Primary keys are uniformly `id`."""
 from __future__ import annotations
 
 import enum
@@ -93,6 +88,19 @@ class Seniority(str, enum.Enum):
 # --------------------------------------------------------------------------- #
 # Auth
 # --------------------------------------------------------------------------- #
+class Organization(Base):
+    """A hiring team. Recruiters belong to exactly one; jobs, uploads and the
+    candidates a team uploads are scoped to it. `invite_code` lets teammates
+    join without an admin; it can be rotated by any member."""
+
+    __tablename__ = "organizations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    invite_code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -104,9 +112,19 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(255))
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.RECRUITER)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Recruiters (and admins who create jobs) belong to an organisation;
+    # candidates never do.
+    org_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
+    organization: Mapped["Organization | None"] = relationship()
     candidate_profile: Mapped["Candidate | None"] = relationship(back_populates="user")
+
+    @property
+    def org_name(self) -> str | None:
+        return self.organization.name if self.organization else None
 
 
 # --------------------------------------------------------------------------- #
@@ -148,6 +166,13 @@ class Job(Base):
     weight_location: Mapped[float] = mapped_column(Float, default=0.10)
     weight_projects: Mapped[float] = mapped_column(Float, default=0.10)
     weight_certifications: Mapped[float] = mapped_column(Float, default=0.05)
+
+    # Blind review is a property of the role, enforced by the server on every
+    # response that carries this job's candidates.
+    blind_review: Mapped[bool] = mapped_column(Boolean, default=False)
+    org_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
 
     embedding: Mapped[list | None] = mapped_column(JSON)
     created_by_id: Mapped[int | None] = mapped_column(
@@ -199,6 +224,14 @@ class Candidate(Base):
     source_filename: Mapped[str | None] = mapped_column(String(512))
     stored_filename: Mapped[str | None] = mapped_column(String(512))
     content_hash: Mapped[str | None] = mapped_column(String(64), index=True)
+    # Owner. A recruiter's upload belongs to their organisation; NULL means the
+    # candidate registered themselves and sits in the shared talent pool, where
+    # an organisation sees them only if they match one of its open jobs.
+    org_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    # Most recent upload, for the in-app resume viewer.
+    latest_upload_id: Mapped[int | None] = mapped_column(Integer)
 
     embedding: Mapped[list | None] = mapped_column(JSON)
 
@@ -341,6 +374,9 @@ class Upload(Base):
     uploaded_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
+    org_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
 
@@ -413,4 +449,7 @@ class AuditEvent(Base):
     entity_id: Mapped[int | None] = mapped_column(Integer)
     summary: Mapped[str] = mapped_column(Text, default="")
     detail: Mapped[dict | None] = mapped_column(JSON)
+    org_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

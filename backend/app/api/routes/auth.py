@@ -15,12 +15,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import FirebaseClaims, get_current_user, get_firebase_claims, record_audit
 from app.core.database import get_db
-from app.models import Candidate, User, UserRole
+from app.models import Candidate, Organization, User, UserRole
 from app.schemas import RegisterRequest, UserOut
+from app.services import tenancy
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -50,14 +52,44 @@ def register(
     # Self-registration can never grant admin — matches the original guard.
     role = payload.role if payload.role is not UserRole.ADMIN else UserRole.CANDIDATE
 
+    org_id: int | None = None
+    if role is UserRole.RECRUITER:
+        code = (payload.invite_code or "").strip().upper()
+        if code:
+            org = db.scalar(select(Organization).where(Organization.invite_code == code))
+            if org is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="That invite code is not valid.",
+                )
+            org_id = org.id
+        else:
+            full_name = payload.full_name.strip()
+            org_id = tenancy.create_organization(
+                db, payload.org_name or f"{full_name or 'My'}'s team"
+            ).id
+
     user = User(
         firebase_uid=claims.uid,
         email=claims.email.lower(),
         full_name=payload.full_name.strip() or claims.name or claims.email.split("@")[0],
         role=role,
+        org_id=org_id,
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two register calls raced (double-click, retry after a timeout): the
+        # other one won, so hand back what it created instead of a 500.
+        db.rollback()
+        existing = db.scalar(select(User).where(User.firebase_uid == claims.uid))
+        if existing is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with this email already exists.",
+            ) from None
+        return UserOut.model_validate(existing)
     db.refresh(user)
 
     if user.role is UserRole.CANDIDATE:

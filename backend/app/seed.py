@@ -1,4 +1,7 @@
-"""Seed the database with demo jobs and the bundled sample resumes.
+"""Seed the database with a demo organisation, demo jobs and the sample resumes.
+
+Everything seeded belongs to one "Demo team" organisation. Register a recruiter
+with the invite code printed at the end to see it in the app.
 
 Auth accounts are no longer created here — Firebase owns sign-up now, so
 there's nothing to seed a password into. Register through the app UI instead
@@ -20,10 +23,11 @@ from sqlalchemy import select
 from app.core.config import BACKEND_DIR, settings
 from app.core.database import SessionLocal, engine
 from app.core.migrations import sync_schema
-from app.models import Base, Candidate, Job, JobStatus, ProcessingStatus, Upload
-from app.services import pipeline, ranking
+from app.models import Base, Candidate, Job, JobStatus, Organization, ProcessingStatus, Upload
+from app.services import pipeline, ranking, tenancy
 
-SAMPLE_DIR = BACKEND_DIR.parent / "src" / "components" / "datafiles" / "Input_files" / "sample resume"
+# Synthetic resumes (invented people) committed with the repo; see samples/README.md.
+SAMPLE_DIR = BACKEND_DIR / "samples" / "resumes"
 
 DEMO_JOBS = [
     {
@@ -83,15 +87,23 @@ DEMO_JOBS = [
 ]
 
 
-def seed_jobs(db) -> list[Job]:
+def seed_org(db) -> Organization:
+    org = db.scalar(select(Organization).where(Organization.name == "Demo team"))
+    if org is None:
+        org = tenancy.create_organization(db, "Demo team")
+        db.commit()
+    return org
+
+
+def seed_jobs(db, org: Organization) -> list[Job]:
     jobs: list[Job] = []
     for spec in DEMO_JOBS:
-        existing = db.scalar(select(Job).where(Job.title == spec["title"]))
+        existing = db.scalar(select(Job).where(Job.title == spec["title"], Job.org_id == org.id))
         if existing:
             print(f"  job      {spec['title']:<32} already exists")
             jobs.append(existing)
             continue
-        job = Job(**spec, status=JobStatus.ACTIVE)  # created_by_id left null: no seeded user to own it
+        job = Job(**spec, status=JobStatus.ACTIVE, org_id=org.id)  # created_by_id left null: no seeded user to own it
         db.add(job)
         db.commit()
         db.refresh(job)
@@ -100,7 +112,7 @@ def seed_jobs(db) -> list[Job]:
     return jobs
 
 
-def seed_resumes(db) -> int:
+def seed_resumes(db, org: Organization) -> int:
     if not SAMPLE_DIR.is_dir():
         print(f"  ! sample resume directory not found: {SAMPLE_DIR}")
         return 0
@@ -115,7 +127,9 @@ def seed_resumes(db) -> int:
 
     queued: list[int] = []
     for path in candidates:
-        already = db.scalar(select(Upload).where(Upload.original_filename == path.name))
+        already = db.scalar(
+            select(Upload).where(Upload.original_filename == path.name, Upload.org_id == org.id)
+        )
         if already:
             continue
 
@@ -129,6 +143,7 @@ def seed_resumes(db) -> int:
             size_bytes=destination.stat().st_size,
             content_type="application/pdf" if path.suffix.lower() == ".pdf" else None,
             status=ProcessingStatus.QUEUED,
+            org_id=org.id,
         )
         db.add(record)
         db.commit()
@@ -160,10 +175,11 @@ def main() -> int:
 
     db = SessionLocal()
     try:
-        jobs = seed_jobs(db)
+        org = seed_org(db)
+        jobs = seed_jobs(db, org)
 
         if not args.no_resumes:
-            seed_resumes(db)
+            seed_resumes(db, org)
 
         print("\n  scoring candidates against every job ...")
         for job in jobs:
@@ -174,6 +190,7 @@ def main() -> int:
         total = db.scalar(select(Candidate).with_only_columns(Candidate.id)) is not None
         print("\nDone." if total else "\nDone (no candidates ingested).")
         print(
+            f"\nDemo team invite code: {org.invite_code}  (register as a recruiter with it to join)"
             "\nNo user accounts were created — sign up through the app (Firebase-backed). "
             "To make your account an admin afterwards:\n"
             "    python -m app.promote_admin you@example.com"

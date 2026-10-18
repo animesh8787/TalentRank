@@ -21,7 +21,7 @@ from app.models import (
     User,
 )
 from app.schemas import AnalyticsOut, AuditEventOut, SkillGap
-from app.services import taxonomy as tx
+from app.services import taxonomy as tx, tenancy
 
 router = APIRouter(tags=["analytics"])
 
@@ -39,12 +39,22 @@ _EXPERIENCE_BANDS = [
 def analytics(
     job_id: int | None = Query(None, description="Scope the numbers to one role"),
     db: Session = Depends(get_db),
-    _: User = Depends(require_staff),
+    user: User = Depends(require_staff),
 ) -> AnalyticsOut:
-    total_candidates = db.scalar(select(func.count(Candidate.id))) or 0
-    total_jobs = db.scalar(select(func.count(Job.id))) or 0
+    # Every number is confined to this organisation (admins: platform-wide).
+    org_id = tenancy.org_scope(user)
+    if job_id is not None:
+        tenancy.get_job(db, user, job_id)  # 404s for another tenant's job
+    cand_ok = tenancy.visible_candidates_clause(org_id)
+    job_ok = Job.org_id == org_id if org_id is not None else Job.id.is_not(None)
+    match_ok = Match.job_id.in_(select(Job.id).where(job_ok))
+    upload_ok = Upload.org_id == org_id if org_id is not None else Upload.id.is_not(None)
+    visible_ids = select(Candidate.id).where(cand_ok)
 
-    match_filter = [Match.job_id == job_id] if job_id else []
+    total_candidates = db.scalar(select(func.count(Candidate.id)).where(cand_ok)) or 0
+    total_jobs = db.scalar(select(func.count(Job.id)).where(job_ok)) or 0
+
+    match_filter = [match_ok] + ([Match.job_id == job_id] if job_id else [])
     total_matches = db.scalar(select(func.count(Match.id)).where(*match_filter)) or 0
     average_score = float(
         db.scalar(select(func.avg(Match.overall_score)).where(*match_filter)) or 0.0
@@ -53,7 +63,7 @@ def analytics(
     since = datetime.now(timezone.utc) - timedelta(days=1)
     processed_today = db.scalar(
         select(func.count(Upload.id)).where(
-            Upload.created_at >= since, Upload.status == ProcessingStatus.DONE
+            Upload.created_at >= since, Upload.status == ProcessingStatus.DONE, upload_ok
         )
     ) or 0
 
@@ -82,6 +92,7 @@ def analytics(
     # Skill supply vs demand --------------------------------------------------
     top_skill_rows = db.execute(
         select(Skill.name, func.count(func.distinct(Skill.candidate_id)))
+        .where(Skill.candidate_id.in_(visible_ids))
         .group_by(Skill.name)
         .order_by(func.count(func.distinct(Skill.candidate_id)).desc())
         .limit(15)
@@ -89,14 +100,16 @@ def analytics(
     top_skills = [{"skill": name, "count": int(count)} for name, count in top_skill_rows]
 
     required: set[str] = set()
-    job_scope = select(Job).where(Job.id == job_id) if job_id else select(Job)
+    job_scope = select(Job).where(job_ok, *([Job.id == job_id] if job_id else []))
     for job in db.scalars(job_scope):
         required.update(tx.canonical_skill(s) for s in (job.required_skills or []))
 
     skill_gaps: list[SkillGap] = []
     for skill in sorted(required):
         supply = db.scalar(
-            select(func.count(func.distinct(Skill.candidate_id))).where(Skill.name == skill)
+            select(func.count(func.distinct(Skill.candidate_id))).where(
+                Skill.name == skill, Skill.candidate_id.in_(visible_ids)
+            )
         ) or 0
         skill_gaps.append(SkillGap(
             skill=skill,
@@ -111,14 +124,14 @@ def analytics(
     for label, low, high in _EXPERIENCE_BANDS:
         count = db.scalar(
             select(func.count(Candidate.id)).where(
-                Candidate.total_experience >= low, Candidate.total_experience < high
+                Candidate.total_experience >= low, Candidate.total_experience < high, cand_ok
             )
         ) or 0
         experience_distribution.append({"band": label, "count": int(count)})
 
-    total_uploads = db.scalar(select(func.count(Upload.id))) or 0
+    total_uploads = db.scalar(select(func.count(Upload.id)).where(upload_ok)) or 0
     done_uploads = db.scalar(
-        select(func.count(Upload.id)).where(Upload.status == ProcessingStatus.DONE)
+        select(func.count(Upload.id)).where(Upload.status == ProcessingStatus.DONE, upload_ok)
     ) or 0
 
     return AnalyticsOut(
@@ -141,9 +154,12 @@ def audit_log(
     limit: int = Query(100, le=500),
     action: str | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_staff),
+    user: User = Depends(require_staff),
 ) -> list[AuditEventOut]:
     statement = select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(limit)
+    org_id = tenancy.org_scope(user)
+    if org_id is not None:
+        statement = statement.where(AuditEvent.org_id == org_id)
     if action:
         statement = statement.where(AuditEvent.action == action)
     return [AuditEventOut.model_validate(e) for e in db.scalars(statement)]

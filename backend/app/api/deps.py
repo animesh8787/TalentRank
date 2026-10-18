@@ -18,9 +18,13 @@ _CREDENTIALS_ERROR = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
+# 403, not 401: the token is valid, the account just has no profile yet. A 401
+# makes clients sign the user out, which locked people out whenever their
+# first /auth/register call had failed.
+NOT_REGISTERED_DETAIL = "not registered"
 _NOT_REGISTERED_ERROR = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="This Firebase account has no TalentRank profile yet. Call /auth/register first.",
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail=NOT_REGISTERED_DETAIL,
 )
 
 
@@ -92,6 +96,7 @@ def record_audit(
             entity_id=entity_id,
             summary=summary,
             detail=detail,
+            org_id=actor.org_id if actor else None,
         ))
         db.commit()
     except Exception:  # noqa: BLE001
@@ -99,7 +104,15 @@ def record_audit(
 
 
 def anonymized_requested(request: Request) -> bool:
-    """Read the bias-reduced review toggle from a header or query parameter."""
+    """The reviewer's own opt-in to blind review (header or query parameter).
+
+    This can only ever *add* redaction. Whether a job is blind is decided by
+    `Job.blind_review` on the server; see `blind_for_job`.
+    """
     header = (request.headers.get("X-Anonymized-Review") or "").strip().lower()
     query = (request.query_params.get("anonymized") or "").strip().lower()
     return header in {"1", "true", "yes"} or query in {"1", "true", "yes"}
+
+
+def blind_for_job(request: Request, job) -> bool:
+    return bool(job.blind_review) or anonymized_requested(request)

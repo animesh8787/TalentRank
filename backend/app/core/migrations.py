@@ -26,11 +26,22 @@ from __future__ import annotations
 import enum as py_enum
 import logging
 
-from sqlalchemy import Enum as SAEnum, inspect, text
+from sqlalchemy import Enum as SAEnum, inspect, select, text, update
 from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.orm import Session
 from sqlalchemy.schema import Column, Table
 
-from app.models import Base
+from app.models import (
+    AuditEvent,
+    Base,
+    Candidate,
+    Job,
+    Organization,
+    Upload,
+    User,
+    UserRole,
+)
+from app.services.tenancy import create_organization
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +66,8 @@ def sync_schema(engine: Engine) -> None:
                 if column.name in existing_columns:
                     continue
                 _add_column(conn, table, column)
+
+    backfill_organizations(engine)
 
 
 def _add_column(conn: Connection, table: Table, column: Column) -> None:
@@ -102,3 +115,62 @@ def _literal_default(column: Column, dialect_name: str) -> str | None:
     if isinstance(value, str):
         return "'" + value.replace("'", "''") + "'"
     return None
+
+
+def backfill_organizations(engine: Engine) -> None:
+    """Move pre-tenancy data into organisations. Idempotent: it only touches
+    rows that have no organisation yet, so it is a no-op once everything is
+    assigned.
+
+    * Every recruiter/admin without an organisation gets a personal one.
+    * Jobs and uploads follow their creator; candidates follow the upload that
+      produced them. Self-registered candidates stay NULL (talent pool).
+    * Anything with no recoverable owner goes to the oldest organisation
+      rather than into the pool, so legacy staff-uploaded data is not
+      silently exposed to every tenant.
+    """
+    with Session(engine) as db:
+        staff = list(db.scalars(
+            select(User).where(User.role.in_([UserRole.RECRUITER, UserRole.ADMIN]), User.org_id.is_(None))
+        ))
+        for user in staff:
+            user.org_id = create_organization(db, f"{user.full_name}'s team").id
+        db.flush()
+
+        fallback = db.scalar(select(Organization.id).order_by(Organization.id).limit(1))
+        if fallback is None:
+            db.commit()
+            return
+
+        org_of = dict(db.execute(select(User.id, User.org_id)).all())
+
+        for job in db.scalars(select(Job).where(Job.org_id.is_(None))):
+            job.org_id = org_of.get(job.created_by_id) or fallback
+        for upload in db.scalars(select(Upload).where(Upload.org_id.is_(None))):
+            uploader = db.get(User, upload.uploaded_by_id) if upload.uploaded_by_id else None
+            if uploader is not None and uploader.role is UserRole.CANDIDATE:
+                continue  # candidate uploads stay in the pool
+            upload.org_id = org_of.get(upload.uploaded_by_id) or fallback
+
+        for candidate in db.scalars(select(Candidate).where(Candidate.org_id.is_(None))):
+            if candidate.user_id is not None:
+                continue  # self-registered: talent pool
+            owner = db.scalar(
+                select(Upload.org_id).where(Upload.candidate_id == candidate.id, Upload.org_id.is_not(None))
+                .order_by(Upload.id.desc()).limit(1)
+            )
+            candidate.org_id = owner or fallback
+
+        for candidate in db.scalars(select(Candidate).where(Candidate.latest_upload_id.is_(None))):
+            candidate.latest_upload_id = db.scalar(
+                select(Upload.id).where(Upload.candidate_id == candidate.id).order_by(Upload.id.desc()).limit(1)
+            )
+
+        # Audit history follows its actor; rows with no staff actor stay
+        # NULL, which only admins can read.
+        for user_id, org_id in org_of.items():
+            if org_id is not None:
+                db.execute(update(AuditEvent).where(
+                    AuditEvent.actor_id == user_id, AuditEvent.org_id.is_(None)
+                ).values(org_id=org_id))
+        db.commit()

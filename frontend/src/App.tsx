@@ -30,6 +30,7 @@ const ActivityPage = lazy(() =>
 const MyResumePage = lazy(() =>
   import('@/pages/MyResumePage').then((m) => ({ default: m.MyResumePage })),
 )
+const TeamPage = lazy(() => import('@/pages/TeamPage').then((m) => ({ default: m.TeamPage })))
 const NotFoundPage = lazy(() =>
   import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
 )
@@ -95,6 +96,7 @@ export default function App() {
                   <Route path="/candidates" element={<RequireAuth staff><CandidatesPage /></RequireAuth>} />
                   <Route path="/analytics" element={<RequireAuth staff><AnalyticsPage /></RequireAuth>} />
                   <Route path="/activity" element={<RequireAuth staff><ActivityPage /></RequireAuth>} />
+                  <Route path="/team" element={<RequireAuth staff><TeamPage /></RequireAuth>} />
                   <Route path="/upload" element={<UploadPage />} />
                   <Route path="/my-resume" element={<MyResumePage />} />
                   <Route path="*" element={<NotFoundPage />} />

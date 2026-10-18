@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, record_audit, require_staff
 from app.core.database import get_db
-from app.models import Job, JobStatus, Match, PipelineStage, User, WorkMode
+from app.models import Job, JobStatus, Match, PipelineStage, User, UserRole, WorkMode
 from app.schemas import (
     JDParseRequest,
     JDParseResult,
@@ -18,7 +18,7 @@ from app.schemas import (
     SkillSuggestionRequest,
     SkillSuggestionsOut,
 )
-from app.services import job_parsing, ranking, taxonomy as tx
+from app.services import job_parsing, ranking, taxonomy as tx, tenancy
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -33,7 +33,12 @@ def _apply_weights(job: Job, weights) -> None:
     job.weight_certifications = weights.certifications
 
 
-def _to_out(db: Session, job: Job) -> JobOut:
+def _to_out(db: Session, job: Job, *, public: bool = False) -> JobOut:
+    """`public` is the candidate-facing view: no pipeline numbers."""
+    if public:
+        data = JobOut.model_validate(job)
+        data.weights = JobWeights(**job.weights)
+        return data
     stats = db.execute(
         select(func.count(Match.id), func.avg(Match.overall_score)).where(Match.job_id == job.id)
     ).one()
@@ -62,11 +67,8 @@ def _normalise_skills(skills: list[str] | None) -> list[str]:
     return list(dict.fromkeys(cleaned))
 
 
-def _get_or_404(db: Session, job_id: int) -> Job:
-    job = db.get(Job, job_id)
-    if job is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
-    return job
+def _get_or_404(db: Session, user: User, job_id: int) -> Job:
+    return tenancy.get_job(db, user, job_id)
 
 
 @router.get("", response_model=list[JobOut])
@@ -74,15 +76,23 @@ def list_jobs(
     status_filter: JobStatus | None = None,
     search: str | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[JobOut]:
     statement = select(Job).order_by(Job.created_at.desc())
+    if user.role is UserRole.CANDIDATE:
+        # Candidates browse the open roles of every organisation, nothing else.
+        statement = statement.where(Job.status == JobStatus.ACTIVE)
+    else:
+        org_id = tenancy.org_scope(user)
+        if org_id is not None:
+            statement = statement.where(Job.org_id == org_id)
     if status_filter:
         statement = statement.where(Job.status == status_filter)
     if search:
         pattern = f"%{search.strip()}%"
         statement = statement.where(Job.title.ilike(pattern))
-    return [_to_out(db, job) for job in db.scalars(statement)]
+    public = user.role is UserRole.CANDIDATE
+    return [_to_out(db, job, public=public) for job in db.scalars(statement)]
 
 
 @router.post("/suggest-skills", response_model=SkillSuggestionsOut)
@@ -123,6 +133,7 @@ def create_job(
         required_skills=_normalise_skills(payload.required_skills),
         nice_to_have_skills=_normalise_skills(payload.nice_to_have_skills),
         created_by_id=user.id,
+        org_id=tenancy.ensure_org(db, user),
     )
     # Work mode is the more granular field; remote_ok (which scoring reads)
     # is derived from it so there is one source of truth, not two.
@@ -147,9 +158,14 @@ def create_job(
 def get_job(
     job_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> JobOut:
-    return _to_out(db, _get_or_404(db, job_id))
+    if user.role is UserRole.CANDIDATE:
+        job = db.get(Job, job_id)
+        if job is None or job.status is not JobStatus.ACTIVE:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
+        return _to_out(db, job, public=True)
+    return _to_out(db, _get_or_404(db, user, job_id))
 
 
 @router.patch("/{job_id}", response_model=JobOut)
@@ -159,7 +175,7 @@ def update_job(
     db: Session = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> JobOut:
-    job = _get_or_404(db, job_id)
+    job = _get_or_404(db, user, job_id)
     data = payload.model_dump(exclude_unset=True)
     weights = data.pop("weights", None)
 
@@ -199,7 +215,7 @@ def delete_job(
     db: Session = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> None:
-    job = _get_or_404(db, job_id)
+    job = _get_or_404(db, user, job_id)
     title = job.title
     db.delete(job)
     db.commit()
@@ -215,7 +231,7 @@ def rescore(
     db: Session = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> JobOut:
-    job = _get_or_404(db, job_id)
+    job = _get_or_404(db, user, job_id)
     job.embedding = None
     count = ranking.rescore_job(db, job)
     record_audit(

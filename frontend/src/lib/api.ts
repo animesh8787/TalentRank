@@ -12,6 +12,7 @@ import type {
   Match,
   MatchDetail,
   Note,
+  Organization,
   PipelineStage,
   RoleMatch,
   Upload,
@@ -159,9 +160,25 @@ export const api = {
     // Login itself is a client-side Firebase call (see hooks/providers.tsx) —
     // there's no backend endpoint for it. These two are what the backend
     // actually needs: provisioning a profile once, and fetching it after.
-    register: (payload: { full_name: string; role: 'recruiter' | 'candidate' }) =>
-      request<User>('/auth/register', { method: 'POST', body: payload }),
+    register: (payload: {
+      full_name: string
+      role: 'recruiter' | 'candidate'
+      /** Recruiters: name of the new team (ignored when joining with a code). */
+      org_name?: string
+      /** Recruiters: join an existing team instead of creating one. */
+      invite_code?: string
+    }) => request<User>('/auth/register', { method: 'POST', body: payload }),
     me: () => request<User>('/auth/me'),
+  },
+
+  orgs: {
+    me: () => request<Organization>('/orgs/me'),
+    rotateCode: () => request<Organization>('/orgs/me/rotate-code', { method: 'POST' }),
+    /** Public: validate an invite code before creating the Firebase account. */
+    checkInvite: (code: string) =>
+      request<{ valid: boolean; org_name: string | null }>(
+        `/orgs/invite/${encodeURIComponent(code.trim())}`,
+      ),
   },
 
   jobs: {
@@ -216,7 +233,24 @@ export const api = {
       return request<Upload[]>('/uploads', { method: 'POST', body: form })
     },
     retry: (id: number) => request<Upload>(`/uploads/${id}/retry`, { method: 'POST' }),
-    fileUrl: (id: number) => `${API_BASE}/api/uploads/${id}/file`,
+    /** The original resume as a Blob, fetched with the bearer token (for the in-app viewer). */
+    file: async (id: number): Promise<Blob> => {
+      const token = await getAuthToken()
+      const headers = new Headers()
+      if (token) headers.set('Authorization', `Bearer ${token}`)
+      const response = await fetch(`${API_BASE}/api/uploads/${id}/file`, { headers })
+      if (!response.ok) {
+        let message = 'Could not load the resume file.'
+        try {
+          const body = (await response.json()) as { detail?: string }
+          if (typeof body.detail === 'string') message = body.detail
+        } catch {
+          /* non-JSON body */
+        }
+        throw new ApiError(message, response.status)
+      }
+      return response.blob()
+    },
     /**
      * Open the live progress stream. Uses fetch rather than EventSource so the
      * bearer token can be sent — the server filters events per user.

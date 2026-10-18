@@ -16,7 +16,7 @@ from app.schemas import (
     RoleMatchOut,
     SkillGapItem,
 )
-from app.services import anonymize, ranking, recommendations, taxonomy as tx
+from app.services import anonymize, ranking, recommendations, taxonomy as tx, tenancy
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
@@ -29,11 +29,29 @@ def _serialise(candidate: Candidate, *, detail: bool, anonymized: bool):
     return model.model_validate(payload)
 
 
-def _get_or_404(db: Session, candidate_id: int) -> Candidate:
-    candidate = db.get(Candidate, candidate_id)
-    if candidate is None:
-        raise HTTPException(status_code=404, detail="Candidate not found.")
-    return candidate
+def _get_or_404(db: Session, user: User, candidate_id: int) -> Candidate:
+    """A candidate role may load only their own profile; staff only what their
+    organisation can see (see services/tenancy.py). Staff get a 404 otherwise,
+    so ids from other tenants look the same as ids that do not exist."""
+    if user.role is UserRole.CANDIDATE:
+        candidate = db.get(Candidate, candidate_id)
+        if candidate is None:
+            raise HTTPException(status_code=404, detail="Candidate not found.")
+        if candidate.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Not your profile.")
+        return candidate
+    return tenancy.get_candidate(db, user, candidate_id)
+
+
+def _blind(request: Request, db: Session, user: User, candidate_id: int) -> bool:
+    """Blind review is enforced per job: a candidate matched to any blind job of
+    the reviewer's organisation is always shown redacted, whatever the client
+    asks for. The client header can only add redaction."""
+    if user.role is UserRole.CANDIDATE:
+        return False
+    return anonymized_requested(request) or (
+        candidate_id in tenancy.blind_candidate_ids(db, tenancy.org_scope(user))
+    )
 
 
 @router.get("", response_model=list[CandidateOut])
@@ -50,9 +68,18 @@ def list_candidates(
     db: Session = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> list[CandidateOut]:
-    statement = select(Candidate)
+    org_id = tenancy.org_scope(user)
+    statement = select(Candidate).where(tenancy.visible_candidates_clause(org_id))
+    blind_ids = tenancy.blind_candidate_ids(db, org_id)
+    anonymized_all = anonymized_requested(request)
 
     if search:
+        # Name/email/resume search is an identity oracle, so it never matches
+        # candidates under blind review.
+        if anonymized_all:
+            return []
+        if blind_ids:
+            statement = statement.where(Candidate.id.not_in(blind_ids))
         pattern = f"%{search.strip()}%"
         statement = statement.where(
             or_(
@@ -80,31 +107,33 @@ def list_candidates(
             )
 
     statement = statement.order_by(Candidate.created_at.desc()).offset(offset).limit(limit)
-    anonymized = anonymized_requested(request)
     return [
-        _serialise(c, detail=False, anonymized=anonymized) for c in db.scalars(statement)
+        _serialise(c, detail=False, anonymized=anonymized_all or c.id in blind_ids)
+        for c in db.scalars(statement)
     ]
 
 
 @router.get("/filters")
 def filter_options(
     db: Session = Depends(get_db),
-    _: User = Depends(require_staff),
+    user: User = Depends(require_staff),
 ) -> dict:
-    """Populate the filter dropdowns from what is actually in the database."""
+    """Populate the filter dropdowns from the candidates this team can see."""
+    visible = tenancy.visible_candidates_clause(tenancy.org_scope(user))
     skills = db.execute(
         select(Skill.name, func.count(Skill.id).label("n"))
+        .where(Skill.candidate_id.in_(select(Candidate.id).where(visible)))
         .group_by(Skill.name)
         .order_by(func.count(Skill.id).desc())
         .limit(60)
     ).all()
     educations = db.scalars(
         select(Candidate.highest_qualification)
-        .where(Candidate.highest_qualification.is_not(None))
+        .where(Candidate.highest_qualification.is_not(None), visible)
         .distinct()
     ).all()
     locations = db.scalars(
-        select(Candidate.location).where(Candidate.location.is_not(None)).distinct().limit(60)
+        select(Candidate.location).where(Candidate.location.is_not(None), visible).distinct().limit(60)
     ).all()
     return {
         "skills": [{"name": name, "count": count} for name, count in skills],
@@ -210,10 +239,8 @@ def get_candidate(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> CandidateDetail:
-    candidate = _get_or_404(db, candidate_id)
-    if user.role is UserRole.CANDIDATE and candidate.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Not your profile.")
-    return _serialise(candidate, detail=True, anonymized=anonymized_requested(request))
+    candidate = _get_or_404(db, user, candidate_id)
+    return _serialise(candidate, detail=True, anonymized=_blind(request, db, user, candidate.id))
 
 
 @router.patch("/{candidate_id}", response_model=CandidateDetail)
@@ -224,11 +251,13 @@ def update_candidate(
     user: User = Depends(get_current_user),
 ) -> CandidateDetail:
     """Correct mis-parsed fields. Candidates may edit only their own record."""
-    candidate = _get_or_404(db, candidate_id)
+    candidate = _get_or_404(db, user, candidate_id)
     if user.role is UserRole.CANDIDATE:
-        if candidate.user_id != user.id:
-            raise HTTPException(status_code=403, detail="Not your profile.")
         candidate.verified_by_candidate = True
+    elif not tenancy.candidate_owned(user, candidate):
+        # Talent-pool candidates are read-only for recruiters: only the person,
+        # or the organisation that uploaded them, may correct the record.
+        raise HTTPException(status_code=403, detail="Only the candidate can edit their own profile.")
 
     data = payload.model_dump(exclude_unset=True)
     skills = data.pop("skills", None)
@@ -302,7 +331,8 @@ def update_candidate(
     record_audit(
         db, actor=user, action="candidate.update", entity_type="candidate",
         entity_id=candidate.id,
-        summary=f"Updated candidate #{candidate.id}", detail=data,
+        # Field names only: the values are personal data.
+        summary=f"Updated candidate #{candidate.id}", detail={"fields": sorted(data)},
     )
     return CandidateDetail.model_validate(candidate)
 
@@ -313,24 +343,29 @@ def delete_candidate(
     db: Session = Depends(get_db),
     user: User = Depends(require_staff),
 ) -> None:
-    candidate = _get_or_404(db, candidate_id)
-    name = candidate.full_name or f"#{candidate_id}"
+    candidate = _get_or_404(db, user, candidate_id)
+    if not tenancy.candidate_owned(user, candidate):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the organisation that uploaded a candidate can delete them.",
+        )
     db.delete(candidate)
     db.commit()
     record_audit(
         db, actor=user, action="candidate.delete", entity_type="candidate",
-        entity_id=candidate_id, summary=f"Deleted candidate {name}",
+        entity_id=candidate_id, summary=f"Deleted candidate #{candidate_id}",
     )
 
 
 @router.get("/{candidate_id}/duplicates", response_model=list[CandidateOut])
 def find_duplicates(
     candidate_id: int,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_staff),
+    user: User = Depends(require_staff),
 ) -> list[CandidateOut]:
-    """Other records that look like the same person."""
-    candidate = _get_or_404(db, candidate_id)
+    """Other records that look like the same person (within what this team can see)."""
+    candidate = _get_or_404(db, user, candidate_id)
     conditions = []
     if candidate.email:
         conditions.append(Candidate.email == candidate.email)
@@ -341,5 +376,15 @@ def find_duplicates(
     if not conditions:
         return []
 
-    statement = select(Candidate).where(Candidate.id != candidate_id, or_(*conditions))
-    return [CandidateOut.model_validate(c) for c in db.scalars(statement)]
+    org_id = tenancy.org_scope(user)
+    statement = select(Candidate).where(
+        Candidate.id != candidate_id,
+        or_(*conditions),
+        tenancy.visible_candidates_clause(org_id),
+    )
+    blind_ids = tenancy.blind_candidate_ids(db, org_id)
+    anonymized_all = anonymized_requested(request)
+    return [
+        _serialise(c, detail=False, anonymized=anonymized_all or c.id in blind_ids)
+        for c in db.scalars(statement)
+    ]
