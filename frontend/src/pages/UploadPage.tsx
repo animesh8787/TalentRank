@@ -18,7 +18,7 @@ import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
 import { cn, formatBytes, formatRelative } from '@/lib/utils'
-import { useAuth } from '@/hooks/providers'
+import { useAnonymized, useAuth } from '@/hooks/providers'
 import { useUploadStream } from '@/hooks/useUploadStream'
 import {
   Badge,
@@ -46,8 +46,14 @@ const STATUS_LABEL: Record<ProcessingStatus, string> = {
   failed: 'Failed',
 }
 
+/** File names such as "Jane_Doe_CV.pdf" identify people, so blind review hides them. */
+function displayName(item: Upload, anonymized: boolean) {
+  return anonymized ? `Resume #${item.id}` : item.original_filename
+}
+
 export function UploadPage() {
   const { isStaff } = useAuth()
+  const { anonymized } = useAnonymized()
   const queryClient = useQueryClient()
   const [dragActive, setDragActive] = React.useState(false)
   const [rejected, setRejected] = React.useState<{ name: string; reason: string }[]>([])
@@ -246,7 +252,7 @@ export function UploadPage() {
                 <div key={item.id} className="space-y-1.5">
                   <div className="flex items-center gap-2 text-xs">
                     <FileText className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    <span className="truncate font-medium">{item.original_filename}</span>
+                    <span className="truncate font-medium">{displayName(item, anonymized)}</span>
                     <span className="ml-auto shrink-0 text-muted-foreground">
                       {STATUS_LABEL[item.status]}
                     </span>
@@ -310,6 +316,7 @@ function UploadRow({
   onRetry: () => void
   retrying: boolean
 }) {
+  const { anonymized } = useAnonymized()
   const isDone = item.status === 'done'
   const isFailed = item.status === 'failed'
 
@@ -332,7 +339,7 @@ function UploadRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate text-sm font-medium">{item.original_filename}</span>
+          <span className="truncate text-sm font-medium">{displayName(item, anonymized)}</span>
           {item.is_duplicate && (
             <Tooltip content="This resume matched one already on file — the existing profile was refreshed.">
               <Badge variant="warning" className="cursor-help">

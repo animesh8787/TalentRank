@@ -16,12 +16,17 @@ from app.core.config import settings
 from app.core.database import SessionLocal, get_db
 from app.models import ProcessingStatus, Upload, User, UserRole
 from app.schemas import UploadOut
-from app.services import pipeline
+from app.services import pipeline, tenancy
 from app.services.extraction import SUPPORTED_SUFFIXES, UNSUPPORTED_LEGACY
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
 MAX_FILE_BYTES = 10 * 1024 * 1024  # 10 MB
+_MEDIA_TYPES = {
+    ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".txt": "text/plain; charset=utf-8",
+}
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -45,6 +50,10 @@ async def upload_resumes(
     if len(files) > 50:
         raise HTTPException(status_code=400, detail="Please upload at most 50 files at a time.")
 
+    # A recruiter's uploads belong to their organisation; a candidate's own
+    # upload feeds their talent-pool profile and has no organisation.
+    org_id = None if user.role is UserRole.CANDIDATE else tenancy.ensure_org(db, user)
+
     created: list[Upload] = []
     for upload_file in files:
         original = upload_file.filename or "resume"
@@ -53,25 +62,26 @@ async def upload_resumes(
         if suffix in UNSUPPORTED_LEGACY:
             created.append(_rejected(
                 db, user, original,
-                f"{suffix} is a legacy format. Please re-save as PDF or DOCX.",
+                f"{suffix} is a legacy format. Please re-save as PDF or DOCX.", org_id,
             ))
             continue
         if suffix not in SUPPORTED_SUFFIXES:
             created.append(_rejected(
                 db, user, original,
-                f"Unsupported file type '{suffix or 'unknown'}'. Use PDF or DOCX.",
+                f"Unsupported file type '{suffix or 'unknown'}'. Use PDF or DOCX.", org_id,
             ))
             continue
 
-        payload = await upload_file.read()
+        # Read one byte past the limit so an oversized file is detected without
+        # ever holding more than MAX_FILE_BYTES + 1 of it in memory.
+        payload = await upload_file.read(MAX_FILE_BYTES + 1)
         if len(payload) > MAX_FILE_BYTES:
             created.append(_rejected(
-                db, user, original,
-                f"File is {len(payload) / 1_048_576:.1f} MB — the limit is 10 MB.",
+                db, user, original, "File is larger than the 10 MB limit.", org_id,
             ))
             continue
         if not payload:
-            created.append(_rejected(db, user, original, "File is empty."))
+            created.append(_rejected(db, user, original, "File is empty.", org_id))
             continue
 
         stored_name = _safe_stored_name(original)
@@ -85,6 +95,7 @@ async def upload_resumes(
             content_type=upload_file.content_type,
             status=ProcessingStatus.QUEUED,
             uploaded_by_id=user.id,
+            org_id=org_id,
         )
         db.add(record)
         created.append(record)
@@ -104,7 +115,7 @@ async def upload_resumes(
     return [UploadOut.model_validate(r) for r in created]
 
 
-def _rejected(db: Session, user: User, filename: str, reason: str) -> Upload:
+def _rejected(db: Session, user: User, filename: str, reason: str, org_id: int | None) -> Upload:
     """Persist a rejected file so the UI can show why it failed."""
     record = Upload(
         original_filename=filename,
@@ -114,6 +125,7 @@ def _rejected(db: Session, user: User, filename: str, reason: str) -> Upload:
         progress=100,
         error_message=reason,
         uploaded_by_id=user.id,
+        org_id=org_id,
         completed_at=datetime.now(timezone.utc),
     )
     db.add(record)
@@ -127,9 +139,13 @@ def list_uploads(
     user: User = Depends(get_current_user),
 ) -> list[UploadOut]:
     statement = select(Upload).order_by(Upload.created_at.desc()).limit(min(limit, 200))
-    # Candidates only ever see their own submissions.
+    # Candidates only ever see their own submissions; staff only their organisation's.
     if user.role is UserRole.CANDIDATE:
         statement = statement.where(Upload.uploaded_by_id == user.id)
+    else:
+        org_id = tenancy.org_scope(user)
+        if org_id is not None:
+            statement = statement.where(Upload.org_id == org_id)
     return [UploadOut.model_validate(r) for r in db.scalars(statement)]
 
 
@@ -150,7 +166,7 @@ async def stream_progress(
         user = db.scalar(select(User).where(User.firebase_uid == claims.uid))
         if user is None or not user.is_active:
             raise HTTPException(status_code=401, detail="Not authenticated")
-        visible = pipeline.visible_to(user.id, user.role)
+        visible = pipeline.visible_to(user.id, user.role, user.org_id)
 
     return StreamingResponse(
         pipeline.event_stream(visible),
@@ -163,6 +179,13 @@ async def stream_progress(
     )
 
 
+def _owns_upload(user: User, record: Upload) -> bool:
+    if user.role is UserRole.CANDIDATE:
+        return record.uploaded_by_id == user.id
+    org_id = tenancy.org_scope(user)
+    return org_id is None or record.org_id == org_id
+
+
 @router.post("/{upload_id}/retry", response_model=UploadOut)
 def retry_upload(
     upload_id: int,
@@ -170,7 +193,9 @@ def retry_upload(
     user: User = Depends(get_current_user),
 ) -> UploadOut:
     record = db.get(Upload, upload_id)
-    if record is None:
+    # Only the uploader (candidate) or the uploading organisation (staff) may
+    # re-run an upload; anyone else gets the same 404 as for a missing id.
+    if record is None or not _owns_upload(user, record):
         raise HTTPException(status_code=404, detail="Upload not found.")
     if not record.stored_filename or not Path(record.stored_filename).is_file():
         raise HTTPException(
@@ -187,6 +212,10 @@ def retry_upload(
     db.refresh(record)
 
     pipeline.enqueue([record.id])
+    record_audit(
+        db, actor=user, action="upload.retry", entity_type="upload", entity_id=record.id,
+        summary=f"Retried processing of upload #{record.id}",
+    )
     return UploadOut.model_validate(record)
 
 
@@ -198,16 +227,24 @@ def download_file(
 ) -> FileResponse:
     """Serve the original resume for the in-app viewer."""
     record = db.get(Upload, upload_id)
-    if record is None:
+    if record is None or not tenancy.can_access_upload(db, user, record):
         raise HTTPException(status_code=404, detail="Upload not found.")
-    if user.role is UserRole.CANDIDATE and record.uploaded_by_id != user.id:
-        raise HTTPException(status_code=403, detail="Not your upload.")
+    # The file *is* the resume, name and all: withhold it while the candidate is
+    # under blind review.
+    if user.role is not UserRole.CANDIDATE and record.candidate_id is not None and (
+        record.candidate_id in tenancy.blind_candidate_ids(db, tenancy.org_scope(user))
+    ):
+        raise HTTPException(status_code=403, detail="Resumes are hidden during blind review.")
 
     path = Path(record.stored_filename) if record.stored_filename else None
     # Confine reads to the storage directory regardless of what is in the DB.
     if path is None or not path.is_file() or settings.storage_dir not in path.resolve().parents:
         raise HTTPException(status_code=404, detail="File is no longer available.")
 
+    # Never echo the client-supplied content type back: it could be text/html.
     return FileResponse(
-        path, filename=record.original_filename, media_type=record.content_type or "application/octet-stream"
+        path,
+        filename=record.original_filename,
+        media_type=_MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream"),
+        headers={"X-Content-Type-Options": "nosniff"},
     )

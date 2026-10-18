@@ -56,6 +56,24 @@ def redact_text(text: str) -> str:
     return text
 
 
+def _strip_name(text: str, real_name: str) -> str:
+    """Remove every token of the candidate's real name from free text.
+
+    Long tokens are matched without a trailing word boundary: PDF extraction
+    glues names onto titles ("KashyapSoftware"), so the name has to be
+    strippable as a prefix too.
+    """
+    for token in re.split(r"[\s.]+", str(real_name or "")):
+        if not token:
+            continue
+        if len(token) >= 3:
+            text = re.sub(rf"(?<!\w){re.escape(token)}", "[name hidden]", text, flags=re.I)
+        else:
+            # Initials and one-letter surnames, only as a whole token.
+            text = re.sub(rf"(?<!\w){re.escape(token)}(?!\w)", "", text)
+    return text
+
+
 def _redact_headline(headline: str, payload: dict) -> str | None:
     """Strip the person's own name and any contact detail out of the headline.
 
@@ -116,7 +134,13 @@ def anonymize_candidate(payload: dict) -> dict:
     if redacted.get("headline"):
         redacted["headline"] = _redact_headline(str(redacted["headline"]), payload)
     if redacted.get("resume_text"):
-        redacted["resume_text"] = redact_text(str(redacted["resume_text"]))
+        redacted["resume_text"] = _strip_name(
+            redact_text(str(redacted["resume_text"])), str(payload.get("full_name") or "")
+        )
+    # The uploaded file's name is routinely "Jane_Doe_Resume.pdf", and the file
+    # itself is the resume, so neither may be reachable under blind review.
+    redacted["source_filename"] = None
+    redacted["latest_upload_id"] = None
 
     educations = redacted.get("educations")
     if isinstance(educations, list):

@@ -26,6 +26,7 @@ import {
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
+import { ResumeViewer } from '@/components/app/ResumeViewer'
 import { DIMENSION_META, STAGE_META, STAGE_ORDER, cn, formatRelative, pct } from '@/lib/utils'
 import {
   Badge,
@@ -425,12 +426,18 @@ function ProfileTab({ match }: { match: MatchDetail }) {
         <Fact label="Education" value={candidate.highest_qualification ?? 'Not detected'} />
         <Fact label="Location" value={candidate.location ?? 'Not detected'} />
         <Fact label="University" value={candidate.university ?? 'Not detected'} />
-        <Fact label="Source file" value={candidate.source_filename ?? '—'} />
+        {!candidate.is_anonymized && (
+          <Fact label="Source file" value={candidate.source_filename ?? '—'} />
+        )}
         <Fact
           label="Verified"
           value={candidate.verified_by_candidate ? 'By candidate' : 'Auto-parsed only'}
         />
       </dl>
+
+      {candidate.latest_upload_id != null && !candidate.is_anonymized && (
+        <ResumeViewer uploadId={candidate.latest_upload_id} filename={candidate.source_filename} />
+      )}
 
       {candidate.skills.length > 0 && (
         <section className="space-y-2">

@@ -89,6 +89,7 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
   const [salaryMin, setSalaryMin] = React.useState(job?.salary_min ? String(job.salary_min) : '')
   const [salaryMax, setSalaryMax] = React.useState(job?.salary_max ? String(job.salary_max) : '')
   const [status, setStatus] = React.useState(job?.status ?? 'active')
+  const [blindReview, setBlindReview] = React.useState(job?.blind_review ?? false)
   const [weights, setWeights] = React.useState<JobWeights>(job?.weights ?? DEFAULT_WEIGHTS)
 
   const parseJD = useMutation({
@@ -185,6 +186,7 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
       salary_min: salaryMin ? Number(salaryMin) : null,
       salary_max: salaryMax ? Number(salaryMax) : null,
       status,
+      blind_review: blindReview,
       weights,
     })
   }
@@ -536,6 +538,14 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
           <Switch checked={remoteOk} onCheckedChange={setRemoteOk} />
           <span>Remote friendly</span>
           <span className="text-xs text-muted-foreground">(everyone scores full marks on location)</span>
+        </label>
+
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <Switch checked={blindReview} onCheckedChange={setBlindReview} />
+          <span>Blind review</span>
+          <span className="text-xs text-muted-foreground">
+            (enforced by the server: names, contact details, universities, locations and resume files are hidden for everyone on this role)
+          </span>
         </label>
 
         <div className="grid gap-4 sm:grid-cols-2">

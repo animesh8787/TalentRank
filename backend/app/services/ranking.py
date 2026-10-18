@@ -8,10 +8,11 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Candidate, Job, JobStatus, Match
-from app.services import embeddings, scoring
+from app.models import Candidate, Job, Match
+from app.services import embeddings, scoring, tenancy
 
 logger = logging.getLogger(__name__)
 
@@ -89,13 +90,7 @@ def score_pair(job: Job, candidate: Candidate, semantic: float) -> scoring.Score
     )
 
 
-def _upsert_match(db: Session, job: Job, candidate: Candidate, result: scoring.ScoreResult) -> Match:
-    match = db.scalar(
-        select(Match).where(Match.job_id == job.id, Match.candidate_id == candidate.id)
-    )
-    if match is None:
-        match = Match(job_id=job.id, candidate_id=candidate.id)
-
+def _apply_result(match: Match, result: scoring.ScoreResult) -> None:
     match.overall_score = result.overall
     match.skills_score = result.dimensions["skills"].score
     match.experience_score = result.dimensions["experience"].score
@@ -105,6 +100,18 @@ def _upsert_match(db: Session, job: Job, candidate: Candidate, result: scoring.S
     match.projects_score = result.dimensions["projects"].score
     match.certifications_score = result.dimensions["certifications"].score
     match.explanation = result.explanation()
+
+
+def _upsert_match(
+    db: Session, job: Job, candidate: Candidate, result: scoring.ScoreResult,
+    existing: dict[int, Match] | None = None,
+) -> Match:
+    match = existing.get(candidate.id) if existing is not None else db.scalar(
+        select(Match).where(Match.job_id == job.id, Match.candidate_id == candidate.id)
+    )
+    if match is None:
+        match = Match(job_id=job.id, candidate_id=candidate.id)
+    _apply_result(match, result)
     db.add(match)
     return match
 
@@ -114,18 +121,45 @@ def has_resume(candidate: Candidate) -> bool:
     return bool((candidate.resume_text or "").strip())
 
 
-def rescore_job(db: Session, job: Job) -> int:
-    """Re-score every candidate against one job. Returns the number scored."""
-    ensure_job_embedding(db, job)
-    everyone = list(db.scalars(select(Candidate)))
-    candidates = [c for c in everyone if has_resume(c)]
+_COMMIT_ATTEMPTS = 3
 
-    # An empty profile has nothing to rank, so drop any match it was given.
-    empty_ids = [c.id for c in everyone if not has_resume(c)]
-    if empty_ids:
-        db.execute(
-            delete(Match).where(Match.job_id == job.id, Match.candidate_id.in_(empty_ids))
-        )
+
+def rescore_job(db: Session, job: Job) -> int:
+    """Re-score every eligible candidate against one job. Returns the number scored.
+
+    Eligible = the job's own organisation's uploads, plus the talent pool for
+    active jobs (see tenancy.eligible_candidates_clause). Matches for anyone
+    who stopped being eligible (job closed, candidate deleted/moved) are
+    dropped so a tenant never keeps a row pointing at someone it can't see.
+
+    Two ingestion workers (or a worker and a request) can rescore the same job
+    at once and both try to INSERT the same (job, candidate) row; the unique
+    constraint rejects the loser. That is expected, so the whole pass is simply
+    retried — the second time the rows exist and are updated instead.
+    """
+    ensure_job_embedding(db, job)
+    for attempt in range(1, _COMMIT_ATTEMPTS + 1):
+        try:
+            return _rescore_job_once(db, job)
+        except IntegrityError:
+            db.rollback()
+            if attempt == _COMMIT_ATTEMPTS:
+                raise
+            logger.info("Concurrent rescore of job %s collided; retrying.", job.id)
+    return 0  # pragma: no cover - loop always returns or raises
+
+
+def _rescore_job_once(db: Session, job: Job) -> int:
+    pool = list(db.scalars(select(Candidate).where(tenancy.eligible_candidates_clause(job))))
+    candidates = [c for c in pool if has_resume(c)]
+    keep_ids = {c.id for c in candidates}
+
+    existing = {m.candidate_id: m for m in db.scalars(select(Match).where(Match.job_id == job.id))}
+    stale = [cid for cid in existing if cid not in keep_ids]
+    if stale:
+        db.execute(delete(Match).where(Match.job_id == job.id, Match.candidate_id.in_(stale)))
+        for cid in stale:
+            existing.pop(cid)
     if not candidates:
         db.commit()
         return 0
@@ -133,34 +167,42 @@ def rescore_job(db: Session, job: Job) -> int:
     semantic = _semantic_scores(job, candidates, corpus=candidates)
     for candidate in candidates:
         result = score_pair(job, candidate, semantic.get(candidate.id, 0.0))
-        _upsert_match(db, job, candidate, result)
+        _upsert_match(db, job, candidate, result, existing)
     db.commit()
     logger.info("Re-scored %d candidates for job %s", len(candidates), job.id)
     return len(candidates)
 
 
+def jobs_for_candidate(db: Session, candidate: Candidate) -> list[Job]:
+    return list(db.scalars(select(Job).where(tenancy.eligible_jobs_clause(candidate))))
+
+
 def rescore_candidate_everywhere(db: Session, candidate: Candidate) -> int:
-    """Score one candidate against every open job — used after ingestion.
+    """Score one candidate against every job they are eligible for.
 
-    Without an embedding model (the free-tier default), the TF-IDF fallback's
-    vector space is fit fresh from whichever candidates are passed in. Scoring
-    only the new candidate here would fit it alone against the job — a
-    two-document fit — while a later full rescore fits over everyone,
-    landing on a different score for the same resume. Doing a full
-    `rescore_job` instead keeps every match for a job fit over the same
-    corpus, so a score never depends on whether it was computed right after
-    upload or by a later rescore.
-
-    When embeddings are enabled this is more work than scoring just the one
-    candidate, but cosine similarity against a job's cached embedding is
-    cheap and doesn't drift, so the correctness cost is TF-IDF-only.
+    A full `rescore_job` per job (rather than scoring only this candidate)
+    keeps each job's TF-IDF vector space fitted over the same corpus, so a
+    score never depends on whether it was computed right after upload or by a
+    later rescore. Batch ingestion avoids repeating this per file: see
+    `rescore_jobs` and the pipeline's batched flush.
     """
     if not has_resume(candidate):
         return 0
-    jobs = list(db.scalars(select(Job).where(Job.status != JobStatus.CLOSED)))
+    jobs = jobs_for_candidate(db, candidate)
     for job in jobs:
         rescore_job(db, job)
     return len(jobs)
+
+
+def rescore_jobs(db: Session, job_ids: set[int]) -> int:
+    """Rescore each of these jobs exactly once."""
+    count = 0
+    for job_id in sorted(job_ids):
+        job = db.get(Job, job_id)
+        if job is not None:
+            rescore_job(db, job)
+            count += 1
+    return count
 
 
 def preview_weights(

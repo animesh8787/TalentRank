@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import { api } from '@/lib/api'
+import { anonymizedStore, api } from '@/lib/api'
 import type { UploadEvent } from '@/types'
 
 export interface StreamState {
@@ -58,12 +58,17 @@ export function useUploadStream(enabled: boolean) {
       }))
 
       if (event.type === 'upload.completed') {
+        // Under blind review neither the file name nor a parsed name may appear
+        // in a toast. (The server also swaps the name for an alias whenever the
+        // team has a blind role, so this only covers the reviewer's own toggle.)
+        const blind = anonymizedStore.get()
+        const label = blind ? 'Resume' : event.filename
         if (event.is_duplicate) {
-          toast.info(`${event.filename} matched an existing candidate`, {
+          toast.info(`${label} matched an existing candidate`, {
             description: 'The existing profile was refreshed instead of creating a duplicate.',
           })
         } else {
-          toast.success(`${event.candidate_name || event.filename} added`, {
+          toast.success(`${blind ? 'Candidate' : event.candidate_name || event.filename} added`, {
             description:
               event.health_score !== undefined
                 ? `Resume health ${Math.round(event.health_score)}/100`
@@ -78,7 +83,7 @@ export function useUploadStream(enabled: boolean) {
         queryClient.invalidateQueries({ queryKey: ['uploads'] })
         queryClient.invalidateQueries({ queryKey: ['my-resume'] })
       } else if (event.status === 'failed') {
-        toast.error(`${event.filename} could not be processed`, {
+        toast.error(`${anonymizedStore.get() ? 'A resume' : event.filename} could not be processed`, {
           description: event.error ?? undefined,
         })
         queryClient.invalidateQueries({ queryKey: ['uploads'] })

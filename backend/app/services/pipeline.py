@@ -22,16 +22,17 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.models import (
     Candidate,
+    Certification,
     Education,
-    Job,
     ProcessingStatus,
+    Project,
     Skill,
     Upload,
     User,
     UserRole,
     WorkExperience,
 )
-from app.services import embeddings, health_check, parsing
+from app.services import anonymize, embeddings, health_check, parsing, ranking, tenancy
 from app.services.extraction import ExtractionError, extract_text
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,7 @@ def _emit(upload: Upload, message: str | None = None) -> None:
         "type": "upload.progress",
         "upload_id": upload.id,
         "_owner_id": upload.uploaded_by_id,
+        "_org_id": upload.org_id,
         "filename": upload.original_filename,
         "status": upload.status.value,
         "progress": upload.progress,
@@ -125,6 +127,8 @@ def _clear_children(db: Session, candidate: Candidate) -> None:
     candidate.skills.clear()
     candidate.experiences.clear()
     candidate.educations.clear()
+    candidate.projects.clear()
+    candidate.certifications.clear()
     db.flush()
 
 
@@ -170,43 +174,85 @@ def _apply_parsed(candidate: Candidate, parsed: parsing.ParsedResume) -> None:
         )
         for e in parsed.educations
     ]
+    candidate.projects = [
+        Project(
+            name=p.name,
+            description=p.description,
+            technologies=p.technologies,
+            url=p.url,
+        )
+        for p in parsed.projects
+    ]
+    candidate.certifications = [
+        Certification(name=c.name, issuer=c.issuer, issue_date=c.issue_date)
+        for c in parsed.certifications
+    ]
 
 
 def _target_candidate(db: Session, upload: Upload, digest: str) -> tuple[Candidate, bool]:
     """Pick the candidate record an upload should populate.
 
-    A candidate uploading their own resume fills in the profile created for
-    them at registration — otherwise the parsed data lands on an unlinked
-    record and /candidates/me never shows it. Staff uploads keep the
-    content-hash de-duplication. Returns (candidate, is_duplicate).
+    * Re-processing an upload (retry, or re-queued after a restart) reuses the
+      record it already created.
+    * A candidate uploading their own resume fills in the profile created for
+      them at registration, so /candidates/me shows it. That profile is in the
+      talent pool (no organisation).
+    * A recruiter's upload de-duplicates by content hash *within their own
+      organisation* only: two teams uploading the same resume each get their
+      own record, and neither can see the other's.
+
+    Returns (candidate, is_duplicate).
     """
-    same_content = db.scalar(select(Candidate).where(Candidate.content_hash == digest))
+    if upload.candidate_id is not None:
+        existing = db.get(Candidate, upload.candidate_id)
+        if existing is not None:
+            return existing, upload.is_duplicate
 
     uploader = db.get(User, upload.uploaded_by_id) if upload.uploaded_by_id else None
-    if uploader is None or uploader.role is not UserRole.CANDIDATE:
-        return (same_content or Candidate()), same_content is not None
+    if uploader is not None and uploader.role is UserRole.CANDIDATE:
+        own = db.scalar(select(Candidate).where(Candidate.user_id == uploader.id))
+        if own is not None:
+            # Re-uploading the same file just refreshes the profile.
+            return own, own.content_hash == digest
+        return Candidate(user_id=uploader.id, email=uploader.email, org_id=None), False
 
-    own = db.scalar(select(Candidate).where(Candidate.user_id == uploader.id))
-    if own is not None:
-        # Re-uploading the same file just refreshes the profile.
-        return own, own.content_hash == digest
-
-    # No profile row yet: claim a matching unlinked record so recruiter notes
-    # and pipeline stages carry over, or start a fresh one.
-    if same_content is not None and same_content.user_id is None:
-        same_content.user_id = uploader.id
+    same_content = db.scalar(
+        select(Candidate).where(
+            Candidate.content_hash == digest, Candidate.org_id == upload.org_id
+        )
+    )
+    if same_content is not None:
         return same_content, True
-    return Candidate(user_id=uploader.id, email=uploader.email), False
+    return Candidate(org_id=upload.org_id), False
 
 
-def process_upload(upload_id: int) -> None:
-    """Run one upload end to end. Safe to call on a worker thread."""
+def _public_name(db: Session, upload: Upload, candidate: Candidate) -> str | None:
+    """Name to show in the live progress stream.
+
+    If the uploading organisation runs any blind-review job the real name
+    never leaves the server, whatever the browser asks for.
+    """
+    if upload.org_id is not None and tenancy.org_has_blind_job(db, upload.org_id):
+        return anonymize.alias_for(candidate.id)
+    return candidate.full_name
+
+
+def process_upload(upload_id: int, *, batch: bool = False) -> None:
+    """Run one upload up to (and including) embedding. Safe on a worker thread.
+
+    Scoring is the expensive, per-job step, so it is not done here when the
+    upload is part of a batch: the worker defers it and `finalize_uploads`
+    rescores each affected job once for the whole batch instead of once per
+    file. Called directly (seed script) it finalises immediately.
+    """
     db = SessionLocal()
     try:
         upload = db.get(Upload, upload_id)
         if upload is None:
             logger.warning("Upload %s vanished before processing.", upload_id)
             return
+        if upload.status is ProcessingStatus.DONE:
+            return  # duplicate queue entry (e.g. retried while a re-queue was pending)
 
         path = Path(upload.stored_filename)
 
@@ -251,9 +297,14 @@ def process_upload(upload_id: int) -> None:
         candidate.health_score = report["score"]
         candidate.health_report = report
 
+        candidate.latest_upload_id = upload.id
         db.add(candidate)
         db.commit()
         db.refresh(candidate)
+        # Remember the record immediately so a restart mid-pipeline re-uses it.
+        upload.candidate_id = candidate.id
+        db.add(upload)
+        db.commit()
 
         # 4. Embed -----------------------------------------------------------
         _set_state(db, upload, ProcessingStatus.EMBEDDING, 75, "Building semantic index")
@@ -263,31 +314,12 @@ def process_upload(upload_id: int) -> None:
             db.add(candidate)
             db.commit()
 
-        # 5. Score against every active job ----------------------------------
-        from app.services.ranking import rescore_candidate_everywhere
-
-        rescore_candidate_everywhere(db, candidate)
-
-        upload.candidate_id = candidate.id
-        upload.status = ProcessingStatus.DONE
-        upload.progress = 100
-        upload.completed_at = datetime.now(timezone.utc)
-        db.add(upload)
-        db.commit()
-
-        bus.publish({
-            "type": "upload.completed",
-            "upload_id": upload.id,
-            "_owner_id": upload.uploaded_by_id,
-            "filename": upload.original_filename,
-            "status": upload.status.value,
-            "progress": 100,
-            "candidate_id": candidate.id,
-            "candidate_name": candidate.full_name,
-            "is_duplicate": upload.is_duplicate,
-            "health_score": candidate.health_score,
-            "error": None,
-        })
+        # 5. Score (batched) -------------------------------------------------
+        if batch:
+            with _pending_lock:
+                _pending.append((upload.id, candidate.id))
+        else:
+            finalize_uploads([(upload.id, candidate.id)])
 
     except Exception as exc:  # noqa: BLE001 - a worker must never die silently
         logger.exception("Pipeline failed for upload %s", upload_id)
@@ -308,6 +340,75 @@ def process_upload(upload_id: int) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Batched scoring
+# --------------------------------------------------------------------------- #
+_pending: list[tuple[int, int]] = []  # (upload_id, candidate_id) awaiting scoring
+_pending_lock = threading.Lock()
+
+
+def finalize_uploads(pairs: list[tuple[int, int]]) -> None:
+    """Score the affected jobs once, then mark every upload in the batch done."""
+    if not pairs:
+        return
+    db = SessionLocal()
+    try:
+        job_ids: set[int] = set()
+        for _, candidate_id in pairs:
+            candidate = db.get(Candidate, candidate_id)
+            if candidate is not None and ranking.has_resume(candidate):
+                job_ids.update(job.id for job in ranking.jobs_for_candidate(db, candidate))
+        ranking.rescore_jobs(db, job_ids)
+
+        for upload_id, candidate_id in pairs:
+            upload = db.get(Upload, upload_id)
+            candidate = db.get(Candidate, candidate_id)
+            if upload is None or candidate is None:
+                continue
+            upload.candidate_id = candidate.id
+            upload.status = ProcessingStatus.DONE
+            upload.progress = 100
+            upload.completed_at = datetime.now(timezone.utc)
+            db.add(upload)
+            db.commit()
+            bus.publish({
+                "type": "upload.completed",
+                "upload_id": upload.id,
+                "_owner_id": upload.uploaded_by_id,
+                "_org_id": upload.org_id,
+                "filename": upload.original_filename,
+                "status": upload.status.value,
+                "progress": 100,
+                "candidate_id": candidate.id,
+                "candidate_name": _public_name(db, upload, candidate),
+                "is_duplicate": upload.is_duplicate,
+                "health_score": candidate.health_score,
+                "error": None,
+            })
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Scoring failed for a batch of %d upload(s)", len(pairs))
+        db.rollback()
+        for upload_id, _ in pairs:
+            upload = db.get(Upload, upload_id)
+            if upload is not None and upload.status is not ProcessingStatus.DONE:
+                upload.status = ProcessingStatus.FAILED
+                upload.error_message = f"{type(exc).__name__}: {exc}"
+                upload.progress = 100
+                upload.completed_at = datetime.now(timezone.utc)
+                db.add(upload)
+                db.commit()
+                _emit(upload)
+    finally:
+        db.close()
+
+
+def flush_pending() -> None:
+    with _pending_lock:
+        pairs = list(_pending)
+        _pending.clear()
+    finalize_uploads(pairs)
+
+
+# --------------------------------------------------------------------------- #
 # Worker pool
 # --------------------------------------------------------------------------- #
 _work_queue: queue.Queue[int] = queue.Queue()
@@ -319,9 +420,13 @@ def _worker_loop() -> None:
     while True:
         upload_id = _work_queue.get()
         try:
-            process_upload(upload_id)
+            process_upload(upload_id, batch=True)
         finally:
             _work_queue.task_done()
+        # Whichever worker finishes last drains the batch; the other sees an
+        # empty list. unfinished_tasks counts items another worker still holds.
+        if _work_queue.unfinished_tasks == 0:
+            flush_pending()
 
 
 def start_workers(count: int = 2) -> None:
@@ -345,11 +450,45 @@ def enqueue(upload_ids: Iterable[int]) -> None:
         _work_queue.put(upload_id)
 
 
-def visible_to(user_id: int, role: UserRole) -> EventFilter:
-    """Staff see every upload; candidates see only their own."""
+def requeue_unfinished() -> int:
+    """Re-enqueue uploads a restart interrupted.
+
+    The work queue is in memory, so anything that was QUEUED or mid-pipeline
+    when the process died would otherwise sit at that status forever.
+    """
+    with SessionLocal() as db:
+        stuck = list(db.scalars(
+            select(Upload).where(
+                Upload.status.not_in([ProcessingStatus.DONE, ProcessingStatus.FAILED])
+            ).order_by(Upload.id)
+        ))
+        runnable: list[int] = []
+        for upload in stuck:
+            if upload.stored_filename and Path(upload.stored_filename).is_file():
+                upload.status = ProcessingStatus.QUEUED
+                upload.progress = 0
+                runnable.append(upload.id)
+            else:
+                upload.status = ProcessingStatus.FAILED
+                upload.error_message = "Interrupted by a restart and the file is gone; please upload it again."
+                upload.progress = 100
+                upload.completed_at = datetime.now(timezone.utc)
+            db.add(upload)
+        db.commit()
+    if runnable:
+        enqueue(runnable)
+        logger.info("Re-queued %d upload(s) interrupted by a restart.", len(runnable))
+    return len(runnable)
+
+
+def visible_to(user_id: int, role: UserRole, org_id: int | None = None) -> EventFilter:
+    """Admins see every upload, recruiters their organisation's, candidates their own."""
+    if role is UserRole.ADMIN:
+        return lambda event: True
     if role is UserRole.CANDIDATE:
         return lambda event: event.get("_owner_id") == user_id
-    return lambda event: True
+    # A recruiter with no organisation sees nothing.
+    return lambda event: org_id is not None and event.get("_org_id") == org_id
 
 
 async def event_stream(visible: EventFilter):
