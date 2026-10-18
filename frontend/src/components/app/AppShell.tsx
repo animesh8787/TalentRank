@@ -1,25 +1,7 @@
 import * as React from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import {
-  BarChart3,
-  Briefcase,
-  Command as CommandIcon,
-  EyeOff,
-  FileSearch,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  Monitor,
-  Moon,
-  ScrollText,
-  Sun,
-  UserCog,
-  Upload,
-  UserCircle,
-  Users,
-  X,
-} from 'lucide-react'
+import { BarChart3, Briefcase, Command as CommandIcon, EyeOff, FileSearch, LayoutDashboard, LogOut, Menu, Monitor, Moon, ScrollText, Sun, UserCog, Upload, UserCircle, Users, X } from '@/components/ui/icons'
 
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -111,7 +93,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card/80 px-4 backdrop-blur-md">
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4-md">
           <Button
             variant="ghost"
             size="icon"
@@ -140,10 +122,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Tooltip
                 content={
                   health.matching.state === 'ready'
-                    ? `Semantic matching active — ${health.matching.model}`
+                    ? `Semantic matching active: ${health.matching.model}`
                     : health.matching.state === 'loading'
                       ? 'Embedding model is still loading; keyword matching is used until it is ready.'
-                      : 'Embedding model unavailable — using keyword (TF-IDF) matching.'
+                      : 'Embedding model unavailable. Using keyword (TF-IDF) matching.'
                 }
               >
                 <Badge
@@ -220,7 +202,7 @@ function Sidebar({
                 'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 isActive
-                  ? 'bg-primary/10 text-primary'
+                  ? 'text-primary'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )
             }
@@ -282,7 +264,7 @@ function AnonymizedToggle({
         className={cn(
           'flex h-8 cursor-pointer items-center gap-2 rounded-md border px-2.5 text-xs font-semibold transition-colors',
           value
-            ? 'border-accent/40 bg-accent/10 text-accent'
+            ? 'border-accent/40 text-accent'
             : 'border-border text-muted-foreground hover:text-foreground',
         )}
       >

@@ -1,24 +1,7 @@
 import * as React from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Award,
-  BadgeCheck,
-  Briefcase,
-  CheckCircle2,
-  FileUp,
-  FolderKanban,
-  GraduationCap,
-  Lightbulb,
-  ListChecks,
-  Plus,
-  Save,
-  ShieldCheck,
-  Sparkles,
-  Target,
-  Trash2,
-  X,
-} from 'lucide-react'
+import { Gauge, Briefcase, CheckCircle2, FileUp, FolderKanban, GraduationCap, Lightbulb, ListChecks, Plus, Save, ShieldCheck, Trash2, X } from '@/components/ui/icons'
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
@@ -228,16 +211,16 @@ function OverviewTab({
         />
         <StatCard
           label="Best role match"
-          value={bestMatch ? `${Math.round(bestMatch.overall_score * 100)}%` : '—'}
+          value={bestMatch ? `${Math.round(bestMatch.overall_score * 100)}%` : 'Not set'}
           hint={bestMatch ? bestMatch.job.title : loadingMatches ? 'Loading…' : 'No open roles yet'}
-          icon={Target}
+          icon={Gauge}
           tone={bestMatch && bestMatch.overall_score >= 0.7 ? 'success' : 'primary'}
         />
         <StatCard
           label="Skills on file"
           value={candidate.skills.length}
           hint={`${candidate.projects.length} project(s) · ${candidate.certifications.length} certification(s)`}
-          icon={Sparkles}
+          icon={Gauge}
           tone="accent"
         />
       </div>
@@ -268,7 +251,6 @@ function OverviewTab({
       {topMissingSkills.length > 0 && (
         <Card className="p-4">
           <h2 className="mb-1 flex items-center gap-1.5 text-sm font-bold">
-            <Target className="size-4 text-primary" aria-hidden="true" />
             Skills that would help you the most
           </h2>
           <p className="mb-3 text-xs text-muted-foreground">
@@ -293,7 +275,7 @@ function OverviewTab({
             What to do next, for {bestMatch.job.title}
           </h2>
           <p className="mb-3 text-xs text-muted-foreground">
-            Your closest-matching open role right now — see the Job matches tab for every role.
+            Your closest-matching open role right now. See the Job matches tab for every role.
           </p>
           <ul className="space-y-1.5">
             {bestMatch.recommendations.slice(0, 4).map((rec, index) => (
@@ -308,7 +290,7 @@ function OverviewTab({
 
       {!loadingMatches && !roleMatches?.length && (
         <EmptyState
-          icon={Target}
+          icon={Gauge}
           title="No open roles to match against yet"
           description="When recruiters open a role, you'll see your match score, skill gap and what to improve here."
         />
@@ -342,7 +324,7 @@ function JobMatchesTab({
   if (!roleMatches?.length) {
     return (
       <EmptyState
-        icon={Target}
+        icon={Gauge}
         title="No open roles to match against yet"
         description="Once a recruiter opens a role, it will appear here with your score, matched and missing skills, and what would improve your fit."
       />
@@ -439,11 +421,11 @@ function CorrectionForm({ candidate }: { candidate: CandidateDetail }) {
       className="space-y-4"
     >
       {!candidate.verified_by_candidate && (
-        <div className="flex items-start gap-2.5 rounded-md border border-primary/30 bg-primary/5 p-3">
+        <div className="flex items-start gap-2.5 rounded-md border border-primary/30 p-3">
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
           <p className="text-xs">
-            <span className="font-semibold">Check these details.</span> Resume parsing is imperfect —
-            names glued to job titles, missing phone numbers and mis-read dates are common. Anything
+            <span className="font-semibold">Check these details.</span> Resume parsing is imperfect.
+            Names glued to job titles, missing phone numbers and mis-read dates are common. Anything
             you correct here is what recruiters actually match against.
           </p>
         </div>
@@ -537,7 +519,7 @@ function CorrectionForm({ candidate }: { candidate: CandidateDetail }) {
               </Badge>
             ))}
             {skills.length === 0 && (
-              <p className="text-sm text-muted-foreground">No skills yet — add your first below.</p>
+              <p className="text-sm text-muted-foreground">No skills yet. Add your first below.</p>
             )}
           </div>
           <div className="flex gap-1.5">
@@ -733,8 +715,8 @@ function ProjectsCard({
           Projects ({projects.length})
         </CardTitle>
         <p className="text-xs text-muted-foreground">
-          Naming the technologies you used is what lets the projects score actually credit them —
-          the description alone isn't matched against required skills.
+          Naming the technologies you used is what lets the projects score actually credit them.
+          The description alone isn't matched against required skills.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -792,7 +774,6 @@ function CertificationsCard({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-1.5">
-          <Award className="size-4 text-muted-foreground" aria-hidden="true" />
           Certifications ({certifications.length})
         </CardTitle>
       </CardHeader>
@@ -824,8 +805,7 @@ function CertificationsCard({
         </Button>
         {certifications.length === 0 && (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <BadgeCheck className="size-3.5" aria-hidden="true" />
-            None on file — add any that are relevant to the roles you're targeting.
+            None on file. Add any that are relevant to the roles you're targeting.
           </p>
         )}
       </CardContent>

@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { AlertTriangle, CheckCircle2, RotateCcw, Shuffle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, RotateCcw, Shuffle } from '@/components/ui/icons'
 
 import { DIMENSION_META, cn, weightsTotalPercent } from '@/lib/utils'
 import { Button, Input, Slider, Tooltip } from '@/components/ui/primitives'
@@ -18,13 +18,13 @@ const DEFAULTS: JobWeights = {
 }
 
 const HINTS: Record<DimensionKey, string> = {
-  skills: 'How many of the required skills the resume actually evidences — exact, aliased or semantic matches.',
+  skills: 'How many of the required skills the resume actually evidences, exact, aliased or semantic matches.',
   experience: "Years of experience against the role's minimum, with credit for close misses.",
   education: 'Highest qualification against the minimum for the role.',
-  semantic: 'Overall meaning-level similarity between the resume and the job description — also called keyword relevance.',
+  semantic: 'Overall meaning-level similarity between the resume and the job description, also called keyword relevance.',
   location: 'Whether the candidate is in the right place (ignored for remote roles).',
   projects: 'Whether listed projects actually demonstrate the required skills, plus how complete that section is.',
-  certifications: 'Certifications on file — a bonus signal, capped once a couple are present.',
+  certifications: 'Certifications on file, a bonus signal, capped once a couple are present.',
 }
 
 /**
@@ -116,8 +116,8 @@ export function WeightSliders({
         className={cn(
           'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium',
           isValid
-            ? 'border-success/30 bg-success/10 text-success'
-            : 'border-destructive/30 bg-destructive/10 text-destructive',
+            ? 'border-success/30 text-success'
+            : 'border-destructive/30 text-destructive',
         )}
         role={isValid ? 'status' : 'alert'}
       >
@@ -130,7 +130,7 @@ export function WeightSliders({
         <span>
           {isValid
             ? 'Weights total 100%.'
-            : `Weights must total exactly 100% — currently ${totalPct.toFixed(0)}%.`}
+            : `Weights must total exactly 100%. Currently ${totalPct.toFixed(0)}%.`}
         </span>
       </div>
 

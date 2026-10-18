@@ -3,15 +3,15 @@
 @tailwind utilities;
 
 @layer base {
-  /* Light palette — "trust blue + orange CTA" SaaS profile.
+  /* Light palette.
      Every token is defined here first; dark mode only redefines values. */
   :root {
-    --background: 210 40% 98%;          /* #F8FAFC */
+    --background: 210 30% 96%;
     --foreground: 217 33% 17%;          /* #1E293B */
 
-    --card: 0 0% 100%;
+    --card: 210 30% 99%;
     --card-foreground: 217 33% 17%;
-    --popover: 0 0% 100%;
+    --popover: 210 30% 99%;
     --popover-foreground: 217 33% 17%;
 
     --primary: 221 83% 53%;             /* #2563EB */
@@ -25,7 +25,7 @@
     --accent-foreground: 0 0% 100%;
 
     --muted: 213 47% 94%;               /* #E9EFF8 */
-    --muted-foreground: 215 16% 47%;    /* #475569 — 4.6:1 on --background */
+    --muted-foreground: 215 16% 40%;
 
     --destructive: 0 72% 51%;           /* #DC2626 */
     --destructive-foreground: 0 0% 100%;
@@ -38,15 +38,15 @@
     --input: 214 32% 91%;
     --ring: 221 83% 53%;
 
-    --dim-skills: 221 83% 53%;
-    --dim-experience: 262 72% 55%;
-    --dim-education: 173 70% 33%;
-    --dim-semantic: 21 90% 48%;
-    --dim-location: 199 89% 41%;
-    --dim-projects: 152 60% 32%;
-    --dim-certifications: 330 75% 42%;
+    --dim-skills: 221 75% 26%;
+    --dim-experience: 221 70% 38%;
+    --dim-education: 221 65% 50%;
+    --dim-semantic: 221 70% 62%;
+    --dim-location: 215 12% 50%;
+    --dim-projects: 221 55% 75%;
+    --dim-certifications: 215 10% 36%;
 
-    --radius: 0.5rem;
+    --radius: 2px;
   }
 
   /* Dark mode uses desaturated, lighter tonal variants rather than inverted
@@ -55,7 +55,7 @@
     --background: 222 47% 8%;
     --foreground: 213 31% 91%;
 
-    --card: 222 44% 11%;
+    --card: 222 40% 12%;
     --card-foreground: 213 31% 91%;
     --popover: 222 44% 11%;
     --popover-foreground: 213 31% 91%;
@@ -84,13 +84,13 @@
     --input: 217 33% 22%;
     --ring: 217 91% 63%;
 
-    --dim-skills: 217 91% 63%;
-    --dim-experience: 258 90% 71%;
-    --dim-education: 172 66% 50%;
-    --dim-semantic: 25 95% 61%;
-    --dim-location: 199 89% 60%;
-    --dim-projects: 150 65% 55%;
-    --dim-certifications: 330 80% 68%;
+    --dim-skills: 217 85% 82%;
+    --dim-experience: 217 80% 72%;
+    --dim-education: 217 75% 62%;
+    --dim-semantic: 217 70% 52%;
+    --dim-location: 215 15% 62%;
+    --dim-projects: 217 55% 42%;
+    --dim-certifications: 215 12% 74%;
   }
 
   * {

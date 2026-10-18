@@ -8,21 +8,7 @@ import {
   RadarChart,
   ResponsiveContainer,
 } from 'recharts'
-import {
-  Building2,
-  ExternalLink,
-  FileText,
-  Github,
-  GraduationCap,
-  Linkedin,
-  Mail,
-  MapPin,
-  MessageSquarePlus,
-  Phone,
-  Quote,
-  Star,
-  Trash2,
-} from 'lucide-react'
+import { Building2, ExternalLink, FileText, Github, GraduationCap, Linkedin, Mail, MapPin, MessageSquarePlus, Phone, Star, Trash2 } from '@/components/ui/icons'
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
@@ -395,7 +381,6 @@ function WhyThisScore({ explanation }: { explanation: NonNullable<MatchDetail['e
                   className="rounded-md border border-border bg-muted/40 p-2.5 text-xs"
                 >
                   <span className="mb-1 flex items-center gap-1.5 font-semibold text-primary">
-                    <Quote className="size-3" aria-hidden="true" />
                     {item.skill}
                   </span>
                   <p className="text-muted-foreground">{item.snippet}</p>
@@ -427,7 +412,7 @@ function ProfileTab({ match }: { match: MatchDetail }) {
         <Fact label="Location" value={candidate.location ?? 'Not detected'} />
         <Fact label="University" value={candidate.university ?? 'Not detected'} />
         {!candidate.is_anonymized && (
-          <Fact label="Source file" value={candidate.source_filename ?? '—'} />
+          <Fact label="Source file" value={candidate.source_filename ?? 'Not set'} />
         )}
         <Fact
           label="Verified"
@@ -452,7 +437,7 @@ function ProfileTab({ match }: { match: MatchDetail }) {
                 key={index}
                 content={
                   skill.evidence
-                    ? `${skill.proficiency} · ${pct(skill.confidence)} confidence — “${skill.evidence}”`
+                    ? `${skill.proficiency} · ${pct(skill.confidence)} confidence. “${skill.evidence}”`
                     : `${skill.proficiency} · ${pct(skill.confidence)} confidence`
                 }
               >
@@ -569,7 +554,7 @@ function highlightTerms(text: string, terms: string[]) {
   const pattern = new RegExp(`(${unique.map(escapeRegex).join('|')})`, 'gi')
   return safe.replace(
     pattern,
-    '<mark class="rounded bg-primary/20 px-0.5 text-foreground">$1</mark>',
+    '<mark class="rounded px-0.5 text-foreground">$1</mark>',
   )
 }
 
@@ -697,7 +682,7 @@ function StarRating({
           onClick={() => onChange(value === star ? undefined : star)}
           aria-label={`Rate ${star} out of 5`}
           aria-pressed={value === star}
-          className="cursor-pointer rounded p-0.5 transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-ring"
+          className="cursor-pointer rounded p-0.5 focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Star
             className={cn(

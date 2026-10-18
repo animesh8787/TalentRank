@@ -43,7 +43,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 toastOptions={{
                   classNames: {
                     toast:
-                      'group border-border bg-card text-card-foreground shadow-pop rounded-lg',
+                      'group border-border bg-card text-card-foreground rounded-md',
                     description: 'text-muted-foreground',
                   },
                 }}

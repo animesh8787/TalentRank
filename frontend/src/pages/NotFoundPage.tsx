@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Compass } from 'lucide-react'
+import { Search } from '@/components/ui/icons'
 
 import { Button } from '@/components/ui/primitives'
 import { EmptyState } from '@/components/ui/primitives'
@@ -9,7 +9,7 @@ export function NotFoundPage() {
   return (
     <PageBody className="mx-auto max-w-lg pt-16">
       <EmptyState
-        icon={Compass}
+        icon={Search}
         title="Page not found"
         description="That URL does not match anything in TalentRank. It may have been renamed or removed."
         action={

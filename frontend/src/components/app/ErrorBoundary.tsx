@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { AlertTriangle, RefreshCw } from '@/components/ui/icons'
 
 import { Button } from '@/components/ui/primitives'
 
@@ -32,8 +32,8 @@ export class ErrorBoundary extends React.Component<
 
     return (
       <div className="flex min-h-dvh items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md space-y-4 rounded-lg border border-border bg-card p-6 text-center shadow-card">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/10">
+        <div className="w-full max-w-md space-y-4 rounded-md border border-border bg-card p-6 text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full">
             <AlertTriangle className="size-6 text-destructive" aria-hidden="true" />
           </div>
           <div className="space-y-1">

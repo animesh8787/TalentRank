@@ -1,19 +1,7 @@
 import * as React from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  AlertCircle,
-  CheckCircle2,
-  CloudUpload,
-  Copy,
-  FileText,
-  Loader2,
-  RefreshCw,
-  Radio,
-  Trash2,
-  Wifi,
-  WifiOff,
-} from 'lucide-react'
+import { AlertCircle, CheckCircle2, CloudUpload, Copy, FileText, Loader2, RefreshCw, Radio, Trash2, Wifi, WifiOff } from '@/components/ui/icons'
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
@@ -99,7 +87,7 @@ export function UploadPage() {
           name: file.name,
           reason:
             extension === '.doc' || extension === '.rtf'
-              ? 'Legacy format — re-save as PDF or DOCX.'
+              ? 'Legacy format. Re-save as PDF or DOCX.'
               : `${extension} is not supported. Use PDF, DOCX or TXT.`,
         })
       } else if (file.size > MAX_BYTES) {
@@ -136,7 +124,7 @@ export function UploadPage() {
         title="Upload resumes"
         description={
           isStaff
-            ? 'Drop a batch of resumes — each one is parsed, scored against every open role, and added to the pipeline automatically.'
+            ? 'Drop a batch of resumes. Each one is parsed, scored against every open role, and added to the pipeline automatically.'
             : 'Upload your resume to see exactly how an applicant tracking system reads it.'
         }
         actions={
@@ -144,7 +132,7 @@ export function UploadPage() {
             content={
               connected
                 ? 'Live progress connected.'
-                : 'Live progress disconnected — reconnecting automatically.'
+                : 'Live progress disconnected. Reconnecting automatically.'
             }
           >
             <Badge variant={connected ? 'success' : 'warning'} className="cursor-help">
@@ -173,8 +161,8 @@ export function UploadPage() {
             handleFiles(event.dataTransfer.files)
           }}
           className={cn(
-            'rounded-lg border-2 border-dashed p-8 text-center transition-colors',
-            dragActive ? 'border-primary bg-primary/5' : 'border-border bg-card',
+            'rounded-md border-2 border-dashed p-8 text-center transition-colors',
+            dragActive ? 'border-primary' : 'border-border bg-card',
           )}
         >
           <input
@@ -189,7 +177,7 @@ export function UploadPage() {
             }}
             aria-label="Choose resume files"
           />
-          <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-primary/10">
+          <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full">
             <CloudUpload className="size-6 text-primary" aria-hidden="true" />
           </div>
           <p className="text-sm font-semibold">
@@ -217,7 +205,7 @@ export function UploadPage() {
         {rejected.length > 0 && (
           <div
             role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm"
+            className="rounded-md border border-destructive/30 p-3 text-sm"
           >
             <p className="mb-1 font-semibold text-destructive">
               {rejected.length} file{rejected.length === 1 ? '' : 's'} were not uploaded
@@ -225,7 +213,7 @@ export function UploadPage() {
             <ul className="space-y-0.5 text-xs text-destructive">
               {rejected.map((item) => (
                 <li key={item.name}>
-                  <span className="font-medium">{item.name}</span> — {item.reason}
+                  <span className="font-medium">{item.name}</span>, {item.reason}
                 </li>
               ))}
             </ul>
@@ -325,7 +313,7 @@ function UploadRow({
       <span
         className={cn(
           'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md',
-          isDone ? 'bg-success/10 text-success' : isFailed ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground',
+          isDone ? 'text-success' : isFailed ? 'text-destructive' : 'bg-muted text-muted-foreground',
         )}
       >
         {isDone ? (
@@ -341,7 +329,7 @@ function UploadRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">{displayName(item, anonymized)}</span>
           {item.is_duplicate && (
-            <Tooltip content="This resume matched one already on file — the existing profile was refreshed.">
+            <Tooltip content="This resume matched one already on file, the existing profile was refreshed.">
               <Badge variant="warning" className="cursor-help">
                 <Copy className="size-3" aria-hidden="true" />
                 Duplicate

@@ -21,7 +21,7 @@ export function friendlyAuthError(error: unknown): string {
     case 'auth/invalid-api-key':
     case 'auth/api-key-not-valid.-please-pass-a-valid-api-key.':
     case 'auth/configuration-not-found':
-      return 'Firebase is not configured yet — see frontend/.env.example.'
+      return 'Firebase is not configured yet. See frontend/.env.example.'
     case 'auth/invalid-email':
       return 'That email address looks invalid.'
     case 'auth/user-disabled':
@@ -31,13 +31,13 @@ export function friendlyAuthError(error: unknown): string {
     case 'auth/invalid-credential':
       return 'Incorrect email or password.'
     case 'auth/email-already-in-use':
-      return 'An account with that email already exists — try signing in instead.'
+      return 'An account with that email already exists, try signing in instead.'
     case 'auth/weak-password':
       return 'Please use at least 8 characters.'
     case 'auth/too-many-requests':
       return 'Too many attempts. Please wait a moment and try again.'
     case 'auth/network-request-failed':
-      return 'Network error — check your connection and try again.'
+      return 'Network error. Check your connection and try again.'
     default:
       return error instanceof Error ? error.message : 'Something went wrong.'
   }

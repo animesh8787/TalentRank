@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { BarChart3, FileCheck2, Gauge, TrendingDown, Users } from 'lucide-react'
+import { BarChart3, FileCheck2, Gauge, TrendingDown, Users } from '@/components/ui/icons'
 
 import { api } from '@/lib/api'
 import { STAGE_META, cn, pct } from '@/lib/utils'
@@ -80,14 +80,14 @@ export function AnalyticsPage() {
           />
           <StatCard
             label="Average fit"
-            value={data ? pct(data.average_score) : '—'}
+            value={data ? pct(data.average_score) : 'Not set'}
             icon={Gauge}
             tone="success"
             loading={isLoading}
           />
           <StatCard
             label="Parse success"
-            value={data ? `${data.upload_success_rate}%` : '—'}
+            value={data ? `${data.upload_success_rate}%` : 'Not set'}
             hint="Resumes read without errors"
             icon={FileCheck2}
             tone={data && data.upload_success_rate < 90 ? 'warning' : 'success'}
@@ -346,7 +346,7 @@ function ChartTooltip({
 }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-pop">
+    <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs">
       <p className="font-semibold">{label}</p>
       <p className="tabular text-muted-foreground">
         {payload[0].value} {suffix}

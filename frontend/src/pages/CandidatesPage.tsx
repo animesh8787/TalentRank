@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Filter, Search, SlidersHorizontal, Users, X } from 'lucide-react'
+import { Filter, Search, SlidersHorizontal, Users, X } from '@/components/ui/icons'
 
 import { api } from '@/lib/api'
 import { cn, formatRelative } from '@/lib/utils'

@@ -1,14 +1,6 @@
 import * as React from 'react'
 import { Link } from 'react-router-dom'
-import {
-  AlertCircle,
-  Briefcase,
-  ChevronDown,
-  Info,
-  Lightbulb,
-  MapPin,
-  TrendingUp,
-} from 'lucide-react'
+import { AlertCircle, Briefcase, ChevronDown, Info, Lightbulb, MapPin, TrendingUp } from '@/components/ui/icons'
 
 import { cn } from '@/lib/utils'
 import { Badge, Tooltip } from '@/components/ui/primitives'
@@ -16,15 +8,15 @@ import { ChipRow, ScoreBadge, ScoreBreakdown } from '@/components/app/shared'
 import type { RoleMatch, SkillGapItem } from '@/types'
 
 const PRIORITY_META: Record<string, { label: string; className: string }> = {
-  high: { label: 'High priority', className: 'text-destructive border-destructive/30 bg-destructive/10' },
-  medium: { label: 'Worth doing', className: 'text-warning border-warning/30 bg-warning/10' },
+  high: { label: 'High priority', className: 'text-destructive border-destructive/30' },
+  medium: { label: 'Worth doing', className: 'text-warning border-warning/30' },
   low: { label: 'Nice to have', className: 'text-muted-foreground border-border bg-muted' },
 }
 
 const GAP_STATUS_META: Record<SkillGapItem['status'], { label: string; className: string; textClassName: string }> = {
-  strong: { label: 'Strong match', className: 'border-success/30 bg-success/10 text-success', textClassName: 'text-success' },
-  developing: { label: 'Needs improvement', className: 'border-warning/30 bg-warning/10 text-warning', textClassName: 'text-warning' },
-  missing: { label: 'Missing', className: 'border-destructive/30 bg-destructive/10 text-destructive', textClassName: 'text-destructive' },
+  strong: { label: 'Strong match', className: 'border-success/30 text-success', textClassName: 'text-success' },
+  developing: { label: 'Needs improvement', className: 'border-warning/30 text-warning', textClassName: 'text-warning' },
+  missing: { label: 'Missing', className: 'border-destructive/30 text-destructive', textClassName: 'text-destructive' },
 }
 
 function GapChip({ item }: { item: SkillGapItem }) {
@@ -72,7 +64,7 @@ export function RoleMatchCard({
   const missing = role.skill_gap.filter((s) => s.status === 'missing')
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card">
+    <div className="overflow-hidden rounded-md border border-border bg-card">
       <button
         type="button"
         onClick={onToggle}
@@ -103,13 +95,13 @@ export function RoleMatchCard({
         </div>
         <ScoreBadge score={role.overall_score} size="default" />
         <ChevronDown
-          className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-180')}
+          className={cn('size-4 shrink-0 text-muted-foreground', expanded && 'rotate-180')}
           aria-hidden="true"
         />
       </button>
 
       {expanded && (
-        <div className="animate-fade-up space-y-5 border-t border-border p-4">
+        <div className="space-y-5 border-t border-border p-4">
           <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">{role.summary}</p>
 
           <div className="grid gap-5 lg:grid-cols-2">

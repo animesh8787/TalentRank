@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Lightbulb, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Lightbulb, XCircle } from '@/components/ui/icons'
 
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/primitives'
@@ -22,20 +22,20 @@ export function HealthReportPanel({
   return (
     <div className="space-y-4">
       {/* Score header */}
-      <div className="flex items-center gap-4 rounded-lg border border-border p-4">
+      <div className="flex items-center gap-4 rounded-md border border-border p-4">
         <ScoreRing score={report.score} />
         <div className="min-w-0">
           <p className="text-lg font-bold tracking-tight">{report.grade}</p>
           <p className="text-xs text-muted-foreground">
             {showIntro
-              ? 'How cleanly an applicant tracking system can read this resume. It does not judge the person — only the file.'
+              ? 'How cleanly an applicant tracking system can read this resume. It does not judge the person, only the file.'
               : `${failing.length} of ${report.checks.length} checks need attention.`}
           </p>
         </div>
       </div>
 
       {report.warnings.length > 0 && (
-        <div className="rounded-md border border-warning/30 bg-warning/10 p-3">
+        <div className="rounded-md border border-warning/30 p-3">
           <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-warning">
             <AlertTriangle className="size-3.5" aria-hidden="true" />
             Extraction warnings
@@ -80,7 +80,7 @@ export function HealthReportPanel({
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">{check.message}</p>
                   {check.fix && (
-                    <p className="mt-1.5 flex items-start gap-1.5 rounded bg-primary/5 p-2 text-xs text-foreground">
+                    <p className="mt-1.5 flex items-start gap-1.5 rounded p-2 text-xs text-foreground">
                       <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
                       <span>{check.fix}</span>
                     </p>

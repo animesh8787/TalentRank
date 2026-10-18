@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import { CheckCircle2, Minus, XCircle } from 'lucide-react'
+import { CheckCircle2, Minus, XCircle } from '@/components/ui/icons'
 
 import { api } from '@/lib/api'
 import { DIMENSION_META, cn, pct } from '@/lib/utils'
@@ -102,7 +102,7 @@ export function CompareDialog({
                         </p>
                         <p className="truncate text-[11px] text-muted-foreground">
                           {match.candidate.total_experience.toFixed(0)} yrs ·{' '}
-                          {match.candidate.highest_qualification ?? '—'}
+                          {match.candidate.highest_qualification ?? 'Not set'}
                         </p>
                       </div>
                     </div>

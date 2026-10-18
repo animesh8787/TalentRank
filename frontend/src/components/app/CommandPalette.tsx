@@ -2,17 +2,7 @@ import * as React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Command } from 'cmdk'
-import {
-  BarChart3,
-  Briefcase,
-  LayoutDashboard,
-  Moon,
-  ScrollText,
-  Sun,
-  Upload,
-  UserCircle,
-  Users,
-} from 'lucide-react'
+import { BarChart3, Briefcase, LayoutDashboard, Moon, ScrollText, Sun, Upload, UserCircle, Users } from '@/components/ui/icons'
 
 import { api } from '@/lib/api'
 import { cn, initials, pct } from '@/lib/utils'

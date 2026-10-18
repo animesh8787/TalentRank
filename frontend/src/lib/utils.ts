@@ -29,9 +29,9 @@ export const BAND_LABEL: Record<Band, string> = {
 }
 
 export const BAND_CLASS: Record<Band, string> = {
-  strong: 'text-success border-success/30 bg-success/10',
-  good: 'text-primary border-primary/30 bg-primary/10',
-  partial: 'text-warning border-warning/30 bg-warning/10',
+  strong: 'text-success border-success/30',
+  good: 'text-primary border-primary/30',
+  partial: 'text-warning border-warning/30',
   weak: 'text-muted-foreground border-border bg-muted',
 }
 
@@ -51,7 +51,7 @@ export function formatBytes(bytes: number) {
 
 export function formatDate(iso: string) {
   const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return '—'
+  if (Number.isNaN(date.getTime())) return 'Not set'
   return new Intl.DateTimeFormat(undefined, {
     day: 'numeric',
     month: 'short',
@@ -61,7 +61,7 @@ export function formatDate(iso: string) {
 
 export function formatRelative(iso: string) {
   const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return '—'
+  if (Number.isNaN(date.getTime())) return 'Not set'
   const seconds = Math.round((date.getTime() - Date.now()) / 1000)
   const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
   const table: [Intl.RelativeTimeFormatUnit, number][] = [
@@ -73,7 +73,7 @@ export function formatRelative(iso: string) {
       return rtf.format(Math.round(seconds / secondsInUnit), unit)
     }
   }
-  return '—'
+  return 'Not set'
 }
 
 export function formatSalary(min: number | null, max: number | null) {
@@ -106,11 +106,11 @@ export const STAGE_META: Record<
   { label: string; className: string; dot: string }
 > = {
   new: { label: 'New', className: 'bg-muted text-muted-foreground border-border', dot: 'bg-muted-foreground' },
-  shortlisted: { label: 'Shortlisted', className: 'bg-primary/10 text-primary border-primary/30', dot: 'bg-primary' },
-  interviewing: { label: 'Interviewing', className: 'bg-accent/10 text-accent border-accent/30', dot: 'bg-accent' },
-  offer: { label: 'Offer', className: 'bg-success/10 text-success border-success/30', dot: 'bg-success' },
+  shortlisted: { label: 'Shortlisted', className: 'text-primary border-primary/30', dot: 'bg-primary' },
+  interviewing: { label: 'Interviewing', className: 'text-accent border-accent/30', dot: 'bg-accent' },
+  offer: { label: 'Offer', className: 'text-success border-success/30', dot: 'bg-success' },
   hired: { label: 'Hired', className: 'bg-success text-success-foreground border-success', dot: 'bg-success-foreground' },
-  rejected: { label: 'Rejected', className: 'bg-destructive/10 text-destructive border-destructive/30', dot: 'bg-destructive' },
+  rejected: { label: 'Rejected', className: 'text-destructive border-destructive/30', dot: 'bg-destructive' },
 }
 
 export const STAGE_ORDER = [

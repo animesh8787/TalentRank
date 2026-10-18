@@ -33,7 +33,7 @@ if (!isFirebaseConfigured) {
   // render so it can tell the person what's missing, rather than a blank screen.
   console.warn(
     'Firebase is not configured (VITE_FIREBASE_* env vars are missing). ' +
-      'Sign-in will not work until they are set — see frontend/.env.example.',
+      'Sign-in will not work until they are set, see frontend/.env.example.',
   )
 }
 

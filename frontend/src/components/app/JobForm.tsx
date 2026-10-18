@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ClipboardPaste, Lightbulb, Plus, Sparkles, Wand2, X } from 'lucide-react'
+import { ClipboardPaste, Lightbulb, Plus, X } from '@/components/ui/icons'
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
@@ -112,7 +112,7 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
       setJdNotes(draft.notes)
       setReviewing(true)
       toast.success('Job description analysed', {
-        description: 'Review every field below before creating the role — nothing is saved yet.',
+        description: 'Review every field below before creating the role. Nothing is saved yet.',
       })
     },
     onError: (error: Error) => toast.error('Could not analyse this text', { description: error.message }),
@@ -154,7 +154,7 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
       next.salary = 'Minimum salary cannot exceed the maximum.'
     const weightTotal = weightsTotalPercent(weights)
     if (Math.abs(weightTotal - 100) > 0.5)
-      next.weights = `Scoring weights must total exactly 100% — currently ${weightTotal.toFixed(0)}%.`
+      next.weights = `Scoring weights must total exactly 100%. Currently ${weightTotal.toFixed(0)}%.`
     setErrors(next)
     if (Object.keys(next).length) {
       // Focus the summary so screen readers announce every problem at once.
@@ -203,12 +203,11 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <DialogBody className="space-y-4">
-          <div className="flex items-start gap-2.5 rounded-md border border-primary/30 bg-primary/5 p-3">
-            <Wand2 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+          <div className="flex items-start gap-2.5 rounded-md border border-primary/30 p-3">
             <p className="text-xs">
               <span className="font-semibold">Paste a job description</span> and TalentRank will
-              draft the structured fields below — title, seniority, experience, skills, education,
-              location — for you to review and edit. Nothing is created until you confirm.
+              draft the structured fields below, title, seniority, experience, skills, education,
+              location, for you to review and edit. Nothing is created until you confirm.
             </p>
           </div>
           <Field label="Job description" htmlFor="jd-paste">
@@ -232,7 +231,6 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
             loading={parseJD.isPending}
             disabled={!jdText.trim()}
           >
-            <Sparkles aria-hidden="true" />
             Analyse description
           </Button>
         </DialogFooter>
@@ -257,10 +255,9 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
         )}
 
         {reviewing && (
-          <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+          <div className="space-y-2 rounded-md border border-primary/30 p-3">
             <p className="flex items-center gap-1.5 text-xs font-semibold text-primary">
-              <Wand2 className="size-3.5" aria-hidden="true" />
-              Drafted from your job description — review every field before creating.
+              Drafted from your job description. Review every field before creating.
             </p>
             {jdNotes.length > 0 && (
               <ul className="list-inside list-disc space-y-0.5 text-xs text-muted-foreground">
@@ -277,7 +274,7 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
             ref={errorSummaryRef}
             tabIndex={-1}
             role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+            className="rounded-md border border-destructive/30 p-3 text-sm text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
           >
             <p className="font-semibold">
               {errors.form ?? `Fix ${errorList.length} field${errorList.length === 1 ? '' : 's'} to continue:`}
@@ -380,7 +377,7 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
         <Field
           label="Job description"
           htmlFor="job-description"
-          hint="This text is compared against each resume for the relevance score — the more specific, the better the matching."
+          hint="This text is compared against each resume for the relevance score, so the more specific it is, the better the matching."
         >
           <Textarea
             value={description}
@@ -395,7 +392,7 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
           label="Required skills"
           required
           error={errors.required_skills}
-          hint="Matched exactly and semantically — “ML” will match “machine learning”."
+          hint="Matched exactly and semantically. “ML” will match “machine learning”."
           value={requiredSkills}
           onChange={setRequiredSkills}
         />
@@ -403,7 +400,7 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
         <SkillEditor
           id="job-nice"
           label="Preferred (nice to have)"
-          hint="Shown to candidates as extra credit — never required for the required-skills score."
+          hint="Shown to candidates as extra credit and never required for the required-skills score."
           value={niceSkills}
           onChange={setNiceSkills}
         />
@@ -422,7 +419,6 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
               loading={suggestSkills.isPending}
               disabled={!title.trim() && !description.trim()}
             >
-              <Sparkles aria-hidden="true" />
               Suggest from title &amp; description
             </Button>
           </div>
@@ -439,7 +435,7 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
                       <button
                         type="button"
                         onClick={() => setRequiredSkills((prev) => [...new Set([...prev, skill])])}
-                        className="cursor-pointer rounded p-0.5 text-muted-foreground hover:bg-primary/10 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+                        className="cursor-pointer rounded p-0.5 text-muted-foreground hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
                         aria-label={`Add ${skill} as required`}
                       >
                         <Plus className="size-3" aria-hidden="true" />
@@ -449,7 +445,7 @@ export function JobForm({ job, onDone }: { job: Job | null; onDone: () => void }
                       <button
                         type="button"
                         onClick={() => setNiceSkills((prev) => [...new Set([...prev, skill])])}
-                        className="cursor-pointer rounded px-1 py-0.5 text-[10px] font-semibold text-muted-foreground hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-ring"
+                        className="cursor-pointer rounded px-1 py-0.5 text-[10px] font-semibold text-muted-foreground hover:text-accent focus-visible:ring-2 focus-visible:ring-ring"
                         aria-label={`Add ${skill} as preferred`}
                       >
                         P
@@ -660,7 +656,7 @@ function SkillEditor({
               }
             }}
             placeholder="Type a skill and press Enter"
-            className="h-8 border-0 shadow-none focus-visible:ring-0"
+            className="h-8 border-0 focus-visible:ring-0"
           />
           <Button
             type="button"

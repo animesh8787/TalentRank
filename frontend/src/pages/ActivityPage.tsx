@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ScrollText, Search } from 'lucide-react'
+import { ScrollText, Search } from '@/components/ui/icons'
 
 import { api } from '@/lib/api'
 import { formatRelative } from '@/lib/utils'
@@ -27,7 +27,7 @@ export function ActivityPage() {
     <>
       <PageHeader
         title="Activity log"
-        description="Every change to roles, candidates and pipeline stages — who did it and when."
+        description="Every change to roles, candidates and pipeline stages, with who did it and when."
       >
         <div className="flex items-center gap-2 border-t border-border px-4 py-2.5 sm:px-6">
           <div className="relative min-w-0 flex-1 sm:max-w-sm">

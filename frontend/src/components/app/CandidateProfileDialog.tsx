@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Copy, Github, Linkedin, Mail, MapPin, Phone, Trash2 } from 'lucide-react'
+import { AlertTriangle, Copy, Github, Linkedin, Mail, MapPin, Phone, Trash2 } from '@/components/ui/icons'
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
@@ -131,14 +131,14 @@ export function CandidateProfileDialog({
             </DialogHeader>
 
             {duplicates.length > 0 && (
-              <div className="flex items-start gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2.5 text-xs">
+              <div className="flex items-start gap-2 border-b border-warning/30 px-4 py-2.5 text-xs">
                 <Copy className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden="true" />
                 <p className="text-warning">
                   <span className="font-semibold">
                     {duplicates.length} possible duplicate
                     {duplicates.length === 1 ? '' : 's'}
                   </span>{' '}
-                  — same email, phone or resume content as{' '}
+                  with the same email, phone or resume content as{' '}
                   {duplicates.map((item) => item.full_name ?? `#${item.id}`).join(', ')}.
                 </p>
               </div>
@@ -157,8 +157,8 @@ export function CandidateProfileDialog({
                 <DialogBody className="space-y-5">
                   <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <Fact label="Experience" value={`${candidate.total_experience.toFixed(0)} yrs`} />
-                    <Fact label="Education" value={candidate.highest_qualification ?? '—'} />
-                    <Fact label="University" value={candidate.university ?? '—'} />
+                    <Fact label="Education" value={candidate.highest_qualification ?? 'Not set'} />
+                    <Fact label="University" value={candidate.university ?? 'Not set'} />
                     <Fact label="Added" value={formatDate(candidate.created_at)} />
                   </dl>
 
@@ -179,7 +179,7 @@ export function CandidateProfileDialog({
                             key={skill.id}
                             content={
                               skill.evidence
-                                ? `${skill.proficiency} · ${pct(skill.confidence)} confidence — “${skill.evidence}”`
+                                ? `${skill.proficiency} · ${pct(skill.confidence)} confidence. “${skill.evidence}”`
                                 : `${skill.proficiency} · ${pct(skill.confidence)} confidence`
                             }
                           >
@@ -201,7 +201,7 @@ export function CandidateProfileDialog({
                         {candidate.experiences.map((item) => (
                           <li key={item.id} className="rounded-md border border-border p-2.5 text-xs">
                             <p className="font-semibold">{item.title ?? 'Role not detected'}</p>
-                            <p className="text-muted-foreground">{item.company ?? '—'}</p>
+                            <p className="text-muted-foreground">{item.company ?? 'Not set'}</p>
                             <p className="tabular mt-0.5 text-[11px] text-muted-foreground">
                               {item.start_date ?? '?'} – {item.end_date ?? 'Present'}
                             </p>
@@ -235,7 +235,7 @@ export function CandidateProfileDialog({
             <div className="flex justify-between gap-2 border-t border-border p-4">
               <Button
                 variant="ghost"
-                className="text-destructive hover:bg-destructive/10"
+                className="text-destructive "
                 onClick={() => {
                   if (
                     window.confirm(

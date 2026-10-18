@@ -1,12 +1,5 @@
 import * as React from 'react'
-import {
-  AlertTriangle,
-  CheckCircle2,
-  CircleDashed,
-  MinusCircle,
-  Sparkles,
-  XCircle,
-} from 'lucide-react'
+import { Check, AlertTriangle, CheckCircle2, CircleDashed, MinusCircle, XCircle } from '@/components/ui/icons'
 
 import { BAND_CLASS, BAND_LABEL, DIMENSION_META, band, cn, initials, pct } from '@/lib/utils'
 import { Badge, Card, Skeleton, Tooltip } from '@/components/ui/primitives'
@@ -57,7 +50,7 @@ export function PageBody({
 /* -------------------------------------------------------------------------- */
 const BAND_ICON = {
   strong: CheckCircle2,
-  good: Sparkles,
+  good: Check,
   partial: MinusCircle,
   weak: CircleDashed,
 } as const
@@ -191,19 +184,13 @@ export function SkillChip({
       className={cn(
         'inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium',
         isMissing
-          ? 'border-destructive/30 bg-destructive/10 text-destructive'
+          ? 'border-destructive/30 text-destructive'
           : isSemantic
-            ? 'border-accent/30 bg-accent/10 text-accent'
-            : 'border-success/30 bg-success/10 text-success',
+            ? 'border-accent/30 text-accent'
+            : 'border-success/30 text-success',
       )}
     >
-      {isMissing ? (
-        <XCircle className="size-3 shrink-0" aria-hidden="true" />
-      ) : isSemantic ? (
-        <Sparkles className="size-3 shrink-0" aria-hidden="true" />
-      ) : (
-        <CheckCircle2 className="size-3 shrink-0" aria-hidden="true" />
-      )}
+      {isMissing ? <XCircle className="size-3 shrink-0" aria-hidden="true" /> : null}
       <span className="truncate">{skill.required}</span>
     </span>
   )
@@ -278,10 +265,10 @@ export function Avatar({
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 select-none items-center justify-center rounded-full font-bold',
+        'inline-flex shrink-0 select-none items-center justify-center rounded-full border border-border font-bold',
         anonymized
-          ? 'bg-accent/15 text-accent'
-          : 'bg-primary/10 text-primary',
+          ? 'text-accent'
+          : 'text-primary',
         size === 'sm' && 'size-6 text-[10px]',
         size === 'default' && 'size-8 text-xs',
         size === 'lg' && 'size-12 text-base',
@@ -313,10 +300,10 @@ export function StatCard({
 }) {
   const toneClass = {
     default: 'text-muted-foreground bg-muted',
-    primary: 'text-primary bg-primary/10',
-    accent: 'text-accent bg-accent/10',
-    success: 'text-success bg-success/10',
-    warning: 'text-warning bg-warning/10',
+    primary: 'text-primary',
+    accent: 'text-accent',
+    success: 'text-success',
+    warning: 'text-warning',
   }[tone]
 
   return (
@@ -348,7 +335,7 @@ export function HealthPill({ score }: { score: number }) {
   const variant = score >= 85 ? 'success' : score >= 70 ? 'default' : score >= 50 ? 'warning' : 'destructive'
   const Icon = score >= 70 ? CheckCircle2 : AlertTriangle
   return (
-    <Tooltip content={`Resume health ${Math.round(score)}/100 — how cleanly this resume could be read.`}>
+    <Tooltip content={`Resume health ${Math.round(score)}/100, how cleanly this resume could be read.`}>
       <Badge variant={variant as never} className="cursor-help">
         <Icon className="size-3" aria-hidden="true" />
         <span className="tabular">{Math.round(score)}</span>

@@ -31,7 +31,6 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "firebase": "^10.14.1",
-    "lucide-react": "^0.451.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^6.27.0",

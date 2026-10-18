@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, Briefcase, MapPin, Plus, Search, Trash2, Users } from 'lucide-react'
+import { ArrowRight, Briefcase, MapPin, Plus, Search, Trash2, Users } from '@/components/ui/icons'
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
@@ -126,7 +126,7 @@ export function JobsPage() {
             description={
               search
                 ? 'Try a different search term, or clear the filter.'
-                : 'Create your first role — every resume on file gets scored against it immediately.'
+                : 'Create your first role. Every resume on file gets scored against it immediately.'
             }
             action={
               search ? (

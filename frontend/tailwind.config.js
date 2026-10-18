@@ -3,6 +3,7 @@ export default {
   darkMode: ['class'],
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
+    boxShadow: {},
     container: { center: true, padding: '1.5rem', screens: { '2xl': '1536px' } },
     extend: {
       fontFamily: {
@@ -53,7 +54,7 @@ export default {
           DEFAULT: 'hsl(var(--popover))',
           foreground: 'hsl(var(--popover-foreground))',
         },
-        // Fixed hues for the five scoring dimensions — used by radar and bars.
+        // One-hue steps for the scoring dimensions, used by radar and bars.
         dim: {
           skills: 'hsl(var(--dim-skills))',
           experience: 'hsl(var(--dim-experience))',
@@ -64,24 +65,16 @@ export default {
       },
       borderRadius: {
         lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        md: 'var(--radius)',
+        sm: 'var(--radius)',
       },
       // Dense dashboard scale (density 8/10): 4 / 8 / 12 / 16 / 24 / 32
       spacing: { 4.5: '1.125rem', 18: '4.5rem' },
-      boxShadow: {
-        xs: '0 1px 2px 0 rgb(15 23 42 / 0.04)',
-        card: '0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.04)',
-        pop: '0 8px 24px -6px rgb(15 23 42 / 0.14), 0 2px 6px -2px rgb(15 23 42 / 0.08)',
-      },
       keyframes: {
         'accordion-down': { from: { height: '0' }, to: { height: 'var(--radix-accordion-content-height)' } },
         'accordion-up': { from: { height: 'var(--radix-accordion-content-height)' }, to: { height: '0' } },
         shimmer: { '100%': { transform: 'translateX(100%)' } },
-        'fade-up': {
-          from: { opacity: '0', transform: 'translateY(4px)' },
-          to: { opacity: '1', transform: 'translateY(0)' },
-        },
+        'fade-up': { from: { opacity: '0' }, to: { opacity: '1' } },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',

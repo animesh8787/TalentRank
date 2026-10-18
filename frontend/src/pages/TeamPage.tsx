@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, KeyRound, RefreshCw, ShieldCheck, Users } from 'lucide-react'
+import { Copy, KeyRound, RefreshCw, ShieldCheck, Users } from '@/components/ui/icons'
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
@@ -25,7 +25,7 @@ export function TeamPage() {
       await navigator.clipboard.writeText(code)
       toast.success('Invite code copied')
     } catch {
-      toast.error('Copy failed — select the code and copy it manually')
+      toast.error('Copy failed. Select the code and copy it manually')
     }
   }
 

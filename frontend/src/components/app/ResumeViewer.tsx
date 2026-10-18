@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Download, FileText, Loader2 } from 'lucide-react'
+import { Download, FileText, Loader2 } from '@/components/ui/icons'
 import { toast } from 'sonner'
 
 import { API_BASE, api, downloadFile } from '@/lib/api'

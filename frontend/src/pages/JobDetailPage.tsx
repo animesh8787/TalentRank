@@ -1,18 +1,7 @@
 import * as React from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  ArrowLeft,
-  ArrowUpDown,
-  Columns3,
-  Download,
-  GitCompare,
-  RefreshCw,
-  Search,
-  SlidersHorizontal,
-  Table2,
-  Users,
-} from 'lucide-react'
+import { ArrowLeft, ArrowUpDown, Columns3, Download, GitCompare, RefreshCw, Search, SlidersHorizontal, Table2, Users } from '@/components/ui/icons'
 import { toast } from 'sonner'
 
 import { api, downloadFile } from '@/lib/api'
@@ -276,7 +265,7 @@ export function JobDetailPage() {
       </PageHeader>
 
       {showWeights && (
-        <div className="animate-fade-up border-b border-border bg-muted/40 px-4 py-4 sm:px-6">
+        <div className="border-b border-border bg-muted/40 px-4 py-4 sm:px-6">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,340px)_1fr]">
             <Card className="p-4">
               <h2 className="mb-1 text-sm font-bold">Scoring weights</h2>
@@ -599,7 +588,7 @@ function RankingTable({
                   key={match.id}
                   className={cn(
                     'cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-muted/50',
-                    isSelected && 'bg-primary/5',
+                    isSelected && '',
                   )}
                   onClick={() => onOpen(match.id)}
                 >

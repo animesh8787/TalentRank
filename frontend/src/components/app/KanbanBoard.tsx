@@ -14,7 +14,7 @@ import {
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { GripVertical, MoveRight } from 'lucide-react'
+import { GripVertical, MoveRight } from '@/components/ui/icons'
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
@@ -151,7 +151,7 @@ export function KanbanBoard({
       </DragOverlay>
 
       <p className="mt-3 text-xs text-muted-foreground">
-        Drag a card between columns, or use the menu on each card — every drag action has a
+        Drag a card between columns, or use the menu on each card. Every drag action has a
         keyboard-accessible equivalent.
       </p>
     </DndContext>
@@ -175,10 +175,10 @@ function Column({
   return (
     <section
       ref={setNodeRef}
-      aria-label={`${meta.label} — ${matches.length} candidates`}
+      aria-label={`${meta.label}: ${matches.length} candidates`}
       className={cn(
-        'flex w-64 shrink-0 flex-col rounded-lg border bg-muted/30 transition-colors',
-        isOver ? 'border-primary bg-primary/5' : 'border-border',
+        'flex w-64 shrink-0 flex-col rounded-md border bg-muted/30 transition-colors',
+        isOver ? 'border-primary' : 'border-border',
       )}
     >
       <header className="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -251,8 +251,8 @@ function CardFace({
   return (
     <Card
       className={cn(
-        'group p-2.5 transition-shadow',
-        dragging ? 'rotate-1 shadow-pop' : 'hover:shadow-card',
+        'group p-2.5 ',
+        dragging ? 'rotate-1' : '',
       )}
     >
       <div className="flex items-start gap-2">
@@ -295,7 +295,7 @@ function CardFace({
         {onMove && (
           <Select value={match.stage} onValueChange={(value) => onMove(value as PipelineStage)}>
             <SelectTrigger
-              className="ml-auto h-6 w-6 justify-center border-0 bg-transparent p-0 shadow-none [&>svg:last-child]:hidden"
+              className="ml-auto h-6 w-6 justify-center border-0 bg-transparent p-0 [&>svg:last-child]:hidden"
               aria-label={`Move ${candidate.full_name ?? 'candidate'} to another stage`}
             >
               <MoveRight className="size-3.5 text-muted-foreground" aria-hidden="true" />

@@ -1,11 +1,12 @@
 import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
+import { Loader2 } from '@/components/ui/icons'
 
 import { useAuth } from '@/hooks/providers'
 import { AppShell } from '@/components/app/AppShell'
 import { LandingPage } from '@/pages/LandingPage'
 import { LoginPage } from '@/pages/LoginPage'
+import { PrivacyPage, TermsPage } from '@/pages/LegalPages'
 
 // Route-level splitting. The charting library alone is ~400kB and is only
 // needed on Analytics and in the explanation drawer, so it should not sit in
@@ -83,6 +84,8 @@ export default function App() {
         path="/login"
         element={user ? <Navigate to={isStaff ? '/dashboard' : '/my-resume'} replace /> : <LoginPage />}
       />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
       <Route
         path="/*"
         element={

@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, CheckCircle2, FileSearch, ShieldCheck, Sparkles, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeft } from '@/components/ui/icons'
 import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
@@ -125,49 +125,26 @@ export function LoginPage() {
 
   return (
     <div className="grid min-h-dvh lg:grid-cols-2">
-      {/* Brand panel — hidden on small screens where it would just push the form down */}
-      <aside className="relative hidden flex-col justify-between overflow-hidden bg-primary p-10 text-primary-foreground lg:flex">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-20"
-          style={{
-            backgroundImage:
-              'radial-gradient(circle at 20% 20%, white 0, transparent 45%), radial-gradient(circle at 80% 70%, white 0, transparent 40%)',
-          }}
-          aria-hidden="true"
-        />
-        <div className="relative flex items-center gap-2">
-          <div className="flex size-8 items-center justify-center rounded-md bg-primary-foreground/15">
-            <FileSearch className="size-5" aria-hidden="true" />
-          </div>
-          <span className="text-lg font-extrabold tracking-tight">TalentRank</span>
-        </div>
+      <aside className="hidden flex-col justify-between border-r border-border bg-muted/40 p-10 lg:flex">
+        <span className="text-lg font-extrabold tracking-tight">TalentRank</span>
 
-        <div className="relative space-y-6">
+        <div className="space-y-6">
           <h1 className="max-w-md text-3xl font-extrabold leading-tight tracking-tight">
             Screening that shows its working.
           </h1>
-          <p className="max-w-md text-sm text-primary-foreground/80">
-            Rank every applicant against a role in seconds — and see exactly which skills,
-            experience and evidence produced the score.
+          <p className="max-w-md text-sm text-muted-foreground">
+            Rank every applicant against a role in seconds, and see which skills, experience and
+            evidence produced the score.
           </p>
-          <ul className="space-y-3 text-sm">
-            {[
-              { icon: Sparkles, text: 'Semantic matching that goes beyond exact keywords' },
-              { icon: CheckCircle2, text: 'Every score traced back to a line in the resume' },
-              { icon: ShieldCheck, text: 'Blind review mode to cut bias on the first pass' },
-              { icon: Users, text: 'Pipeline, notes and shortlists in one place' },
-            ].map(({ icon: Icon, text }) => (
-              <li key={text} className="flex items-start gap-2.5">
-                <Icon className="mt-0.5 size-4 shrink-0 text-primary-foreground/70" aria-hidden="true" />
-                <span className="text-primary-foreground/90">{text}</span>
-              </li>
-            ))}
+          <ul className="max-w-md list-disc space-y-2 pl-5 text-sm marker:text-muted-foreground">
+            <li>Semantic matching reads beyond exact keywords</li>
+            <li>Every score is traced to a line in the resume</li>
+            <li>Blind review mode for the first pass</li>
+            <li>Pipeline, notes and shortlists in one place</li>
           </ul>
         </div>
 
-        <p className="relative text-xs text-primary-foreground/60">
-          Resume screening &amp; explainable candidate ranking
-        </p>
+        <p className="text-xs text-muted-foreground">Resume screening and explainable candidate ranking</p>
       </aside>
 
       {/* Form */}
@@ -183,9 +160,6 @@ export function LoginPage() {
 
           <div className="lg:hidden">
             <div className="mb-4 flex items-center gap-2">
-              <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                <FileSearch className="size-5" aria-hidden="true" />
-              </div>
               <span className="text-lg font-extrabold tracking-tight">TalentRank</span>
             </div>
           </div>
@@ -193,13 +167,13 @@ export function LoginPage() {
           {!isFirebaseConfigured && (
             <div
               role="alert"
-              className="flex items-start gap-2.5 rounded-md border border-warning/30 bg-warning/10 px-3 py-2.5 text-sm text-warning"
+              className="flex items-start gap-2.5 rounded-md border border-warning/30 px-3 py-2.5 text-sm text-warning"
             >
               <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               <div>
                 <p className="font-semibold">Firebase isn't configured yet</p>
                 <p className="mt-0.5 text-xs">
-                  Sign-in won't work until <code>VITE_FIREBASE_*</code> env vars are set — see{' '}
+                  Sign-in won't work until <code>VITE_FIREBASE_*</code> env vars are set, see{' '}
                   <code>frontend/.env.example</code>.
                 </p>
               </div>
@@ -228,7 +202,7 @@ export function LoginPage() {
             {errors.form && (
               <div
                 role="alert"
-                className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
+                className="rounded-md border border-destructive/30 px-3 py-2 text-sm font-medium text-destructive"
               >
                 {errors.form}
               </div>
@@ -278,7 +252,7 @@ export function LoginPage() {
                 disabled={resetting}
                 className="cursor-pointer text-xs font-medium text-primary underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {resetting ? 'Sending…' : 'Forgot password?'}
+                {resetting ? 'Sending...' : 'Forgot password?'}
               </button>
             )}
 
@@ -289,8 +263,8 @@ export function LoginPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="candidate">Candidate — I want to submit my resume</SelectItem>
-                    <SelectItem value="recruiter">Recruiter — I am hiring</SelectItem>
+                    <SelectItem value="candidate">Candidate: I want to submit my resume</SelectItem>
+                    <SelectItem value="recruiter">Recruiter: I am hiring</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>
@@ -347,6 +321,12 @@ export function LoginPage() {
               {mode === 'login' ? 'Sign in' : 'Create account'}
             </Button>
           </form>
+
+          <p className="text-xs text-muted-foreground">
+            By continuing you agree to the{' '}
+            <Link to="/terms" className="underline underline-offset-2 hover:text-foreground">Terms</Link> and{' '}
+            <Link to="/privacy" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</Link>.
+          </p>
         </div>
       </main>
     </div>

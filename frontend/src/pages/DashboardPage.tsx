@@ -1,15 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import {
-  ArrowRight,
-  Briefcase,
-  FileCheck2,
-  Gauge,
-  Plus,
-  Sparkles,
-  Upload,
-  Users,
-} from 'lucide-react'
+import { ArrowRight, Briefcase, FileCheck2, Gauge, Plus, Upload, Users } from '@/components/ui/icons'
 
 import { api } from '@/lib/api'
 import { STAGE_META, cn, formatRelative, pct } from '@/lib/utils'
@@ -77,7 +68,7 @@ export function DashboardPage() {
           />
           <StatCard
             label="Average fit"
-            value={analytics ? pct(analytics.average_score) : '—'}
+            value={analytics ? pct(analytics.average_score) : 'Not set'}
             hint="Across every scored pairing"
             icon={Gauge}
             tone="success"
@@ -85,7 +76,7 @@ export function DashboardPage() {
           />
           <StatCard
             label="Parse success"
-            value={analytics ? `${analytics.upload_success_rate}%` : '—'}
+            value={analytics ? `${analytics.upload_success_rate}%` : 'Not set'}
             hint="Resumes read without errors"
             icon={FileCheck2}
             tone={analytics && analytics.upload_success_rate < 90 ? 'warning' : 'success'}
@@ -209,7 +200,7 @@ export function DashboardPage() {
                 <Skeleton className="h-40 w-full" />
               ) : !analytics?.skill_gaps.length ? (
                 <EmptyState
-                  icon={Sparkles}
+                  icon={Gauge}
                   title="Nothing to compare yet"
                   description="Add a role with required skills to see where your pool is thin."
                 />

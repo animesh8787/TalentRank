@@ -15,7 +15,7 @@ import * as TabsPrimitive from '@radix-ui/react-tabs'
 import * as TooltipPrimitive from '@radix-ui/react-tooltip'
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { Check, ChevronDown, Loader2, X } from 'lucide-react'
+import { Check, ChevronDown, Loader2, X } from '@/components/ui/icons'
 
 import { cn } from '@/lib/utils'
 
@@ -87,7 +87,7 @@ export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('rounded-lg border border-border bg-card text-card-foreground shadow-card', className)}
+      className={cn('rounded-md border border-border bg-card text-card-foreground', className)}
       {...props}
     />
   ),
@@ -126,9 +126,9 @@ const badgeVariants = cva(
         secondary: 'border-transparent bg-secondary text-secondary-foreground',
         outline: 'border-border text-foreground',
         muted: 'border-transparent bg-muted text-muted-foreground',
-        success: 'border-success/30 bg-success/10 text-success',
-        warning: 'border-warning/30 bg-warning/10 text-warning',
-        destructive: 'border-destructive/30 bg-destructive/10 text-destructive',
+        success: 'border-success/30 text-success',
+        warning: 'border-warning/30 text-warning',
+        destructive: 'border-destructive/30 text-destructive',
       },
     },
     defaultVariants: { variant: 'default' },
@@ -156,7 +156,7 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
     <input
       ref={ref}
       className={cn(
-        'flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm shadow-xs transition-colors',
+        'flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm transition-colors',
         'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         'disabled:cursor-not-allowed disabled:opacity-50',
         'file:border-0 file:bg-transparent file:text-sm file:font-medium',
@@ -175,7 +175,7 @@ export const Textarea = React.forwardRef<
   <textarea
     ref={ref}
     className={cn(
-      'flex min-h-[80px] w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-xs',
+      'flex min-h-[80px] w-full rounded-md border border-input bg-card px-3 py-2 text-sm',
       'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
       'disabled:cursor-not-allowed disabled:opacity-50',
       className,
@@ -263,12 +263,12 @@ export const DialogContent = React.forwardRef<
 >(({ className, children, wide, ...props }, ref) => (
   <DialogPrimitive.Portal>
     {/* Blur here signals "background is dismissable", not decoration. */}
-    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-foreground/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
         'fixed left-1/2 top-1/2 z-50 flex max-h-[90dvh] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col',
-        'rounded-lg border border-border bg-card shadow-pop',
+        'rounded-md border border-border bg-card',
         'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
         wide ? 'max-w-4xl' : 'max-w-lg',
         className,
@@ -334,11 +334,11 @@ export const SheetContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { width?: string }
 >(({ className, children, width = 'sm:max-w-2xl', ...props }, ref) => (
   <DialogPrimitive.Portal>
-    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-foreground/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-card shadow-pop',
+        'fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-card',
         'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right duration-200',
         width,
         className,
@@ -370,7 +370,7 @@ export const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-card px-3 text-sm shadow-xs',
+      'flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-card px-3 text-sm',
       'focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
       '[&>span]:truncate',
       className,
@@ -394,7 +394,7 @@ export const SelectContent = React.forwardRef<
       ref={ref}
       position={position}
       className={cn(
-        'relative z-50 max-h-72 min-w-[8rem] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-pop',
+        'relative z-50 max-h-72 min-w-[8rem] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground',
         'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
         position === 'popper' && 'data-[side=bottom]:translate-y-1 w-[var(--radix-select-trigger-width)]',
         className,
@@ -456,7 +456,7 @@ export const TabsTrigger = React.forwardRef<
     className={cn(
       'inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-sm px-3 py-1 text-xs font-semibold transition-all',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
-      'data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs',
+      'data-[state=active]:bg-card data-[state=active]:text-foreground',
       className,
     )}
     {...props}
@@ -498,7 +498,7 @@ export const Progress = React.forwardRef<
   >
     <ProgressPrimitive.Indicator
       // Animate transform, never width — width animation forces layout.
-      className={cn('h-full w-full flex-1 bg-primary transition-transform duration-300', indicatorClassName)}
+      className={cn('h-full w-full flex-1 bg-primary duration-300', indicatorClassName)}
       style={{ transform: `translateX(-${100 - Math.max(0, Math.min(100, value))}%)` }}
     />
   </ProgressPrimitive.Root>
@@ -517,7 +517,7 @@ export const Slider = React.forwardRef<
     <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-muted">
       <SliderPrimitive.Range className="absolute h-full bg-primary" />
     </SliderPrimitive.Track>
-    <SliderPrimitive.Thumb className="block size-4 cursor-grab rounded-full border-2 border-primary bg-card shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:cursor-grabbing disabled:pointer-events-none disabled:opacity-50" />
+    <SliderPrimitive.Thumb className="block size-4 cursor-grab rounded-full border-2 border-primary bg-card transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:cursor-grabbing disabled:pointer-events-none disabled:opacity-50" />
   </SliderPrimitive.Root>
 ))
 Slider.displayName = 'Slider'
@@ -537,7 +537,7 @@ export const Switch = React.forwardRef<
     )}
     {...props}
   >
-    <SwitchPrimitive.Thumb className="pointer-events-none block size-4 rounded-full bg-card shadow-xs ring-0 transition-transform data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0" />
+    <SwitchPrimitive.Thumb className="pointer-events-none block size-4 rounded-full bg-card ring-0 data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0" />
   </SwitchPrimitive.Root>
 ))
 Switch.displayName = 'Switch'
@@ -549,7 +549,7 @@ export const Checkbox = React.forwardRef<
   <CheckboxPrimitive.Root
     ref={ref}
     className={cn(
-      'peer size-4 shrink-0 cursor-pointer rounded-sm border border-input shadow-xs',
+      'peer size-4 shrink-0 cursor-pointer rounded-sm border border-input',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
       'disabled:cursor-not-allowed disabled:opacity-50',
       'data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground',
@@ -585,7 +585,7 @@ export function Tooltip({
         <TooltipPrimitive.Content
           side={side}
           sideOffset={6}
-          className="z-50 max-w-xs rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-pop animate-in fade-in-0 zoom-in-95"
+          className="z-50 max-w-xs rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground animate-in fade-in-0 zoom-in-95"
         >
           {content}
           <TooltipPrimitive.Arrow className="fill-popover" />
@@ -618,7 +618,7 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border px-6 py-12 text-center',
+        'flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-border px-6 py-12 text-center',
         className,
       )}
     >
