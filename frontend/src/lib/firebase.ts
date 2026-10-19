@@ -1,5 +1,5 @@
 import { getApp, getApps, initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import { connectAuthEmulator, getAuth } from 'firebase/auth'
 
 /** True once real Firebase project values are present — not the placeholder
  * fallback below. Lets the app boot and show a clear message locally before a
@@ -40,3 +40,7 @@ if (!isFirebaseConfigured) {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
+
+// Local demos and screenshots only: point the SDK at an Auth emulator when asked.
+const emulatorHost = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST
+if (emulatorHost) connectAuthEmulator(auth, `http://${emulatorHost}`, { disableWarnings: true })
